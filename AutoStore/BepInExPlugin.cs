@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace AutoStore
 {
-    [BepInPlugin("aedenthorn.AutoStore", "Auto Store", "0.3.0")]
+    [BepInPlugin("aedenthorn.AutoStore", "Auto Store", "0.3.1")]
     public class BepInExPlugin: BaseUnityPlugin
     {
         private static readonly bool isDebug = true;
@@ -15,6 +15,7 @@ namespace AutoStore
         public static ConfigEntry<float> dropRangeChests;
         public static ConfigEntry<float> dropRangePersonalChests;
         public static ConfigEntry<float> dropRangeReinforcedChests;
+        public static ConfigEntry<float> dropRangeBlackmetalChests;
         public static ConfigEntry<float> dropRangeCarts;
         public static ConfigEntry<float> dropRangeShips;
         public static ConfigEntry<string> itemDisallowTypes;
@@ -25,6 +26,8 @@ namespace AutoStore
         public static ConfigEntry<string> itemAllowTypesPersonalChests;
         public static ConfigEntry<string> itemDisallowTypesReinforcedChests;
         public static ConfigEntry<string> itemAllowTypesReinforcedChests;
+        public static ConfigEntry<string> itemDisallowTypesBlackmetalChests;
+        public static ConfigEntry<string> itemAllowTypesBlackmetalChests;
         public static ConfigEntry<string> itemDisallowTypesCarts;
         public static ConfigEntry<string> itemAllowTypesCarts;
         public static ConfigEntry<string> itemDisallowTypesShips;
@@ -51,6 +54,7 @@ namespace AutoStore
             dropRangeChests = Config.Bind<float>("General", "DropRangeChests", 5f, "The maximum range to pull dropped items");
             dropRangePersonalChests = Config.Bind<float>("General", "DropRangePersonalChests", 5f, "The maximum range to pull dropped items");
             dropRangeReinforcedChests = Config.Bind<float>("General", "DropRangeReinforcedChests", 5f, "The maximum range to pull dropped items");
+            dropRangeBlackmetalChests = Config.Bind<float>("General", "DropRangeBlackmetalChests", 5f, "The maximum range to pull dropped items");
             dropRangeCarts = Config.Bind<float>("General", "DropRangeCarts", 5f, "The maximum range to pull dropped items");
             dropRangeShips = Config.Bind<float>("General", "DropRangeShips", 5f, "The maximum range to pull dropped items");
             itemDisallowTypes = Config.Bind<string>("General", "ItemDisallowTypes", "", "Types of item to disallow pulling for, comma-separated.");
@@ -61,6 +65,8 @@ namespace AutoStore
             itemAllowTypesPersonalChests = Config.Bind<string>("General", "ItemAllowTypesPersonalChests", "", "Types of item to only allow pulling for, comma-separated. Overrides ItemDisallowTypesPersonalChests");
             itemDisallowTypesReinforcedChests = Config.Bind<string>("General", "ItemDisallowTypesReinforcedChests", "", "Types of item to disallow pulling for, comma-separated.");
             itemAllowTypesReinforcedChests = Config.Bind<string>("General", "ItemAllowTypesReinforcedChests", "", "Types of item to only allow pulling for, comma-separated. Overrides ItemDisallowTypesReinforcedChests");
+            itemDisallowTypesBlackmetalChests = Config.Bind<string>("General", "ItemDisallowTypesBlackmetalChests", "", "Types of item to disallow pulling for, comma-separated.");
+            itemAllowTypesBlackmetalChests = Config.Bind<string>("General", "ItemAllowTypesBlackmetalChests", "", "Types of item to only allow pulling for, comma-separated. Overrides ItemDisallowTypesBlackmetalChests");
             itemDisallowTypesCarts = Config.Bind<string>("General", "ItemDisallowTypesCarts", "", "Types of item to disallow pulling for, comma-separated.");
             itemAllowTypesCarts = Config.Bind<string>("General", "ItemAllowTypesCarts", "", "Types of item to only allow pulling for, comma-separated. Overrides ItemDisallowTypesCarts");
             itemDisallowTypesShips = Config.Bind<string>("General", "ItemDisallowTypesShips", "", "Types of item to disallow pulling for, comma-separated.");
@@ -148,6 +154,14 @@ namespace AutoStore
                     return true;
                 return false;
             }
+            else if (container.name.StartsWith("piece_chest_blackmetal"))
+            {
+                if (itemAllowTypesBlackmetalChests.Value != null && itemAllowTypesBlackmetalChests.Value.Length > 0 && !itemAllowTypesBlackmetalChests.Value.Split(',').Contains(name))
+                    return true;
+                if (itemDisallowTypesBlackmetalChests.Value.Split(',').Contains(name))
+                    return true;
+                return false;
+            }
             else if (container.name.StartsWith("piece_chest"))
             {
                 if (itemAllowTypesReinforcedChests.Value != null && itemAllowTypesReinforcedChests.Value.Length > 0 && !itemAllowTypesReinforcedChests.Value.Split(',').Contains(name))
@@ -182,6 +196,10 @@ namespace AutoStore
             {
                 return dropRangePersonalChests.Value;
             }
+            else if (container.name.StartsWith("piece_chest_blackmetal"))
+            {
+                return dropRangeBlackmetalChests.Value;
+            }
             else if (container.name.StartsWith("piece_chest"))
             {
                 return dropRangeReinforcedChests.Value;
@@ -197,13 +215,18 @@ namespace AutoStore
                 if (!isOn.Value || ___m_nview == null || ___m_nview.GetZDO() == null)
                     return;
 
+                var range = ContainerRange(__instance);
+                if (range < 0f)
+                    return;
+
                 Vector3 position = __instance.transform.position + Vector3.up;
-                foreach (Collider collider in Physics.OverlapSphere(position, ContainerRange(__instance), LayerMask.GetMask(new string[] { "item" })))
+                // Dbgl($"container item name: {__instance.name} at {position}");
+                foreach (Collider collider in Physics.OverlapSphere(position, range, LayerMask.GetMask(new string[] { "item" })))
                 {
                     if (collider?.attachedRigidbody)
                     {
                         ItemDrop item = collider.attachedRigidbody.GetComponent<ItemDrop>();
-                        //Dbgl($"nearby item name: {item.m_itemData.m_dropPrefab.name}");
+                        // Dbgl($"nearby item name: {item.m_itemData.m_dropPrefab.name}");
 
                         if (item?.GetComponent<ZNetView>()?.IsValid() != true || !item.GetComponent<ZNetView>().IsOwner())
                             continue;

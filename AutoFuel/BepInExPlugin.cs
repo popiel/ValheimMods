@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace AutoFuel
 {
-    [BepInPlugin("aedenthorn.AutoFuel", "Auto Fuel", "0.9.3")]
+    [BepInPlugin("aedenthorn.AutoFuel", "Auto Fuel", "0.9.4")]
     public class BepInExPlugin: BaseUnityPlugin
     {
         private static readonly bool isDebug = false;
@@ -92,30 +92,6 @@ namespace AutoFuel
             return result;
         }
 
-        public static List<Container> GetNearbyContainers(Vector3 center, float range)
-        {
-            try { 
-                List<Container> containers = new List<Container>();
-
-                foreach (Collider collider in Physics.OverlapSphere(center, Mathf.Max(range, 0), LayerMask.GetMask(new string[] { "piece" })))
-                {
-                    Container container = collider.transform.parent?.parent?.gameObject?.GetComponent<Container>();
-                    if (container?.GetComponent<ZNetView>()?.IsValid() != true)
-                        continue;
-                    if (container?.transform?.position != null && (container.name.StartsWith("piece_chest") || container.name.StartsWith("Container")) && container.GetInventory() != null)
-                    {
-                        containers.Add(container);
-                    }
-                }
-                return containers;
-            }
-            catch
-            {
-                return new List<Container>();
-            }
-        }
-
-
         [HarmonyPatch(typeof(Fireplace), "UpdateFireplace")]
         static class Fireplace_UpdateFireplace_Patch
         {
@@ -149,7 +125,7 @@ namespace AutoFuel
 
                 int maxFuel = (int)(fireplace.m_maxFuel - Mathf.Ceil(znview.GetZDO().GetFloat("fuel", 0f)));
 
-                List<Container> nearbyContainers = GetNearbyContainers(fireplace.transform.position, fireplaceRange.Value);
+                List<Container> nearbyContainers = AedenthornUtils.GetNearbyContainers(fireplace.transform.position, fireplaceRange.Value);
 
                 Vector3 position = fireplace.transform.position + Vector3.up;
                 foreach (Collider collider in Physics.OverlapSphere(position, dropRange.Value, LayerMask.GetMask(new string[] { "item" })))
@@ -266,8 +242,8 @@ namespace AutoFuel
             int maxFuel = __instance.m_maxFuel - Mathf.CeilToInt(___m_nview.GetZDO().GetFloat("fuel", 0f));
 
 
-            List<Container> nearbyOreContainers = GetNearbyContainers(__instance.transform.position, smelterOreRange.Value);
-            List<Container> nearbyFuelContainers = GetNearbyContainers(__instance.transform.position, smelterFuelRange.Value);
+            List<Container> nearbyOreContainers = AedenthornUtils.GetNearbyContainers(__instance.transform.position, smelterOreRange.Value);
+            List<Container> nearbyFuelContainers = AedenthornUtils.GetNearbyContainers(__instance.transform.position, smelterFuelRange.Value);
 
             if (__instance.name.Contains("charcoal_kiln") && restrictKilnOutput.Value) {
                 string outputName = __instance.m_conversion[0].m_to.m_itemData.m_shared.m_name;
