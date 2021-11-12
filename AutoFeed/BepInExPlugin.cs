@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace AutoFeed
 {
-    [BepInPlugin("aedenthorn.AutoFeed", "Auto Feed", "0.6.1")]
+    [BepInPlugin("aedenthorn.AutoFeed", "Auto Feed", "0.6.2")]
     public class BepInExPlugin: BaseUnityPlugin
     {
         public static ConfigEntry<bool> isDebug;
@@ -119,7 +119,7 @@ namespace AutoFeed
         {
             static void Postfix(MonsterAI __instance, ZNetView ___m_nview, Character ___m_character, Tameable ___m_tamable, List<ItemDrop> ___m_consumeItems, float dt, bool __result)
             {
-                if (!modEnabled.Value || !isOn.Value || __result || !___m_nview.IsOwner() || ___m_tamable == null || !___m_tamable.IsHungry() || ___m_consumeItems == null || ___m_consumeItems.Count == 0)
+                if (!modEnabled.Value || !isOn.Value || __result || !___m_character || !___m_nview || !___m_nview.IsOwner() || ___m_tamable == null || !___m_tamable.IsHungry() || ___m_consumeItems == null || ___m_consumeItems.Count == 0)
                     return;
 
                 string name = GetPrefabName(__instance.gameObject.name);
@@ -170,7 +170,7 @@ namespace AutoFeed
         {
             await Task.Delay(delay);
 
-            if (!tamable.IsHungry())
+            if (tamable == null || !tamable.IsHungry())
                 return;
 
             if (requireOnlyFood.Value)

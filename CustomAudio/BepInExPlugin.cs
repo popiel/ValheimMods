@@ -12,7 +12,7 @@ using UnityEngine.Networking;
 
 namespace CustomAudio
 {
-    [BepInPlugin("aedenthorn.CustomAudio", "Custom Audio", "1.4.2")]
+    [BepInPlugin("aedenthorn.CustomAudio", "Custom Audio", "1.4.4")]
     public class BepInExPlugin: BaseUnityPlugin
     {
         public static ConfigEntry<bool> isDebug;
@@ -147,7 +147,7 @@ namespace CustomAudio
 
         private void PreloadClipCoroutine(string path, AudioType audioType, Dictionary<string, AudioClip> whichDict)
         {
-            if (path.EndsWith(".txt"))
+            if (path.EndsWith(".txt") || !path.Contains("."))
                 return;
 
             Dbgl($"path: {path}");
@@ -498,12 +498,15 @@ namespace CustomAudio
                 if (__instance.name.Contains("groundtorch") && customSFX.ContainsKey("groundtorch"))
                 {
                     Dbgl("Replacing ground torch audio");
-                    __instance.m_enabledObjectHigh.GetComponentInChildren<AudioSource>().clip = customSFX["groundtorch"];
+                    __instance.m_enabledObject.GetComponentInChildren<AudioSource>().clip = customSFX["groundtorch"];
                 }
                 else if(__instance.name.Contains("walltorch") && customSFX.ContainsKey("walltorch"))
                 {
                     Dbgl("Replacing walltorch audio");
-                    __instance.m_enabledObjectHigh.GetComponentInChildren<AudioSource>().clip = customSFX["walltorch"];
+                    if(__instance.m_enabledObjectHigh?.GetComponentInChildren<AudioSource>())
+                        __instance.m_enabledObjectHigh.GetComponentInChildren<AudioSource>().clip = customSFX["walltorch"];
+                    else if(__instance.m_enabledObject?.GetComponentInChildren<AudioSource>())
+                        __instance.m_enabledObject.GetComponentInChildren<AudioSource>().clip = customSFX["walltorch"];
                 }
                 else if (__instance.name.Contains("fire_pit") && customSFX.ContainsKey("fire_pit"))
                 {

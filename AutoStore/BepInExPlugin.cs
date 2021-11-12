@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace AutoStore
 {
-    [BepInPlugin("aedenthorn.AutoStore", "Auto Store", "0.3.0")]
+    [BepInPlugin("aedenthorn.AutoStore", "Auto Store", "0.4.1")]
     public class BepInExPlugin: BaseUnityPlugin
     {
         private static readonly bool isDebug = true;
@@ -25,6 +25,8 @@ namespace AutoStore
         public static ConfigEntry<string> itemAllowTypesPersonalChests;
         public static ConfigEntry<string> itemDisallowTypesReinforcedChests;
         public static ConfigEntry<string> itemAllowTypesReinforcedChests;
+        public static ConfigEntry<string> itemDisallowTypesBlackMetalChests;
+        public static ConfigEntry<string> itemAllowTypesBlackMetalChests;
         public static ConfigEntry<string> itemDisallowTypesCarts;
         public static ConfigEntry<string> itemAllowTypesCarts;
         public static ConfigEntry<string> itemDisallowTypesShips;
@@ -61,12 +63,14 @@ namespace AutoStore
             itemAllowTypesPersonalChests = Config.Bind<string>("General", "ItemAllowTypesPersonalChests", "", "Types of item to only allow pulling for, comma-separated. Overrides ItemDisallowTypesPersonalChests");
             itemDisallowTypesReinforcedChests = Config.Bind<string>("General", "ItemDisallowTypesReinforcedChests", "", "Types of item to disallow pulling for, comma-separated.");
             itemAllowTypesReinforcedChests = Config.Bind<string>("General", "ItemAllowTypesReinforcedChests", "", "Types of item to only allow pulling for, comma-separated. Overrides ItemDisallowTypesReinforcedChests");
+            itemDisallowTypesBlackMetalChests = Config.Bind<string>("General", "ItemDisallowTypesBlackMetalChests", "", "Types of item to disallow pulling for, comma-separated.");
+            itemAllowTypesBlackMetalChests = Config.Bind<string>("General", "ItemAllowTypesBlackMetalChests", "", "Types of item to only allow pulling for, comma-separated. Overrides ItemDisallowTypesBlackMetalChests");
             itemDisallowTypesCarts = Config.Bind<string>("General", "ItemDisallowTypesCarts", "", "Types of item to disallow pulling for, comma-separated.");
             itemAllowTypesCarts = Config.Bind<string>("General", "ItemAllowTypesCarts", "", "Types of item to only allow pulling for, comma-separated. Overrides ItemDisallowTypesCarts");
             itemDisallowTypesShips = Config.Bind<string>("General", "ItemDisallowTypesShips", "", "Types of item to disallow pulling for, comma-separated.");
             itemAllowTypesShips = Config.Bind<string>("General", "ItemAllowTypesShips", "", "Types of item to only allow pulling for, comma-separated. Overrides ItemDisallowTypesShips");
             toggleString = Config.Bind<string>("General", "ToggleString", "Auto Pull: {0}", "Text to show on toggle. {0} is replaced with true/false");
-            toggleKey = Config.Bind<string>("General", "ToggleKey", "", "Key to toggle behaviour. Leave blank to disable the toggle key.");
+            toggleKey = Config.Bind<string>("General", "ToggleKey", "", "Key to toggle behaviour. Leave blank to disable the toggle key. Use https://docs.unity3d.com/Manual/class-InputManager.html syntax.");
             mustHaveItemToPull = Config.Bind<bool>("General", "MustHaveItemToPull", false, "If true, a container must already have at least one of the item to pull.");
             isOn = Config.Bind<bool>("General", "IsOn", true, "Behaviour is currently on or not");
             
@@ -84,7 +88,7 @@ namespace AutoStore
         {
             if (!modEnabled.Value || AedenthornUtils.IgnoreKeyPresses())
                 return;
-            if (CheckKeyDown(toggleKey.Value))
+            if (AedenthornUtils.CheckKeyDown(toggleKey.Value))
             {
                 isOn.Value = !isOn.Value;
                 Config.Save();
@@ -92,18 +96,6 @@ namespace AutoStore
             }
 
         }
-        private static bool CheckKeyDown(string value)
-        {
-            try
-            {
-                return Input.GetKeyDown(value.ToLower());
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
         private static bool DisallowItem(Container container, ItemDrop.ItemData item)
         {
             string name = item.m_dropPrefab.name;
@@ -145,6 +137,14 @@ namespace AutoStore
                 if (itemAllowTypesPersonalChests.Value != null && itemAllowTypesPersonalChests.Value.Length > 0 && !itemAllowTypesPersonalChests.Value.Split(',').Contains(name))
                     return true;
                 if (itemDisallowTypesPersonalChests.Value.Split(',').Contains(name))
+                    return true;
+                return false;
+            }
+            else if (container.name.StartsWith("piece_chest_blackmetal"))
+            {
+                if (itemAllowTypesBlackMetalChests.Value != null && itemAllowTypesBlackMetalChests.Value.Length > 0 && !itemAllowTypesBlackMetalChests.Value.Split(',').Contains(name))
+                    return true;
+                if (itemDisallowTypesBlackMetalChests.Value.Split(',').Contains(name))
                     return true;
                 return false;
             }
@@ -203,44 +203,52 @@ namespace AutoStore
                     if (collider?.attachedRigidbody)
                     {
                         ItemDrop item = collider.attachedRigidbody.GetComponent<ItemDrop>();
-                        //Dbgl($"nearby item name: {item.m_itemData.m_dropPrefab.name}");
 
                         if (item?.GetComponent<ZNetView>()?.IsValid() != true || !item.GetComponent<ZNetView>().IsOwner())
                             continue;
-
-                        if (DisallowItem(__instance, item.m_itemData))
-                            continue;
-
-                        Dbgl($"auto storing {item.m_itemData.m_dropPrefab.name} from ground");
-                        
-
-                        while (item.m_itemData.m_stack > 1 && __instance.GetInventory().CanAddItem(item.m_itemData, 1))
+                        //Dbgl($"nearby item name: {item.m_itemData.m_dropPrefab.name}");
+                        if (TryStoreItem(__instance, ref item.m_itemData))
                         {
-                            item.m_itemData.m_stack--;
-                            ItemDrop.ItemData newItem = item.m_itemData.Clone();
-                            newItem.m_stack = 1;
-                            __instance.GetInventory().AddItem(newItem);
-                            Traverse.Create(item).Method("Save").GetValue();
-                            typeof(Container).GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance, new object[] { });
-                            typeof(Inventory).GetMethod("Changed", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance.GetInventory(), new object[] { });
-                        }
-
-                        if (item.m_itemData.m_stack == 1 && __instance.GetInventory().CanAddItem(item.m_itemData, 1))
-                        {
-                            ItemDrop.ItemData newItem = item.m_itemData.Clone();
-                            item.m_itemData.m_stack = 0;
-                            Traverse.Create(item).Method("Save").GetValue();
-                            if (___m_nview.GetZDO() == null)
+                            AccessTools.Method(typeof(ItemDrop), "Save").Invoke(item, new object[] { });
+                            if (item.GetComponent<ZNetView>() == null)
                                 DestroyImmediate(item.gameObject);
                             else
                                 ZNetScene.instance.Destroy(item.gameObject);
-                            __instance.GetInventory().AddItem(newItem);
-                            typeof(Container).GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance, new object[] { });
-                            typeof(Inventory).GetMethod("Changed", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance.GetInventory(), new object[] { });
                         }
                     }
                 }
             }
+        }
+
+        private static bool TryStoreItem(Container __instance, ref ItemDrop.ItemData item)
+        {
+
+            if (DisallowItem(__instance, item))
+                return false;
+
+            Dbgl($"auto storing {item.m_dropPrefab.name} from ground");
+
+            while (item.m_stack > 1 && __instance.GetInventory().CanAddItem(item, 1))
+            {
+                item.m_stack--;
+                ItemDrop.ItemData newItem = item.Clone();
+                newItem.m_stack = 1;
+                __instance.GetInventory().AddItem(newItem);
+                Traverse.Create(item).Method("Save").GetValue();
+                typeof(Container).GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance, new object[] { });
+                typeof(Inventory).GetMethod("Changed", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance.GetInventory(), new object[] { });
+            }
+
+            if (item.m_stack == 1 && __instance.GetInventory().CanAddItem(item, 1))
+            {
+                ItemDrop.ItemData newItem = item.Clone();
+                item.m_stack = 0;
+                __instance.GetInventory().AddItem(newItem);
+                typeof(Container).GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance, new object[] { });
+                typeof(Inventory).GetMethod("Changed", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance.GetInventory(), new object[] { });
+                return true;
+            }
+            return false;
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
