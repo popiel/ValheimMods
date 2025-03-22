@@ -1,4 +1,5 @@
 ﻿using HarmonyLib;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -11,9 +12,9 @@ namespace CustomTextures
     {
 
         [HarmonyPatch(typeof(FejdStartup), "SetupObjectDB")]
-        static class FejdStartup_SetupObjectDB_Patch
+        public static class FejdStartup_SetupObjectDB_Patch
         {
-            static void Postfix()
+            public static void Postfix()
             {
                 if (!modEnabled.Value)
                     return;
@@ -29,9 +30,9 @@ namespace CustomTextures
         }
 
         [HarmonyPatch(typeof(ZoneSystem), "Awake")]
-        static class ZoneSystem_Awake_Patch
+        public static class ZoneSystem_Awake_Patch
         {
-            static void Prefix(ZoneSystem __instance)
+            public static void Prefix(ZoneSystem __instance)
             {
                 outputDump.Clear();
                 ReplaceZoneSystemTextures(__instance);
@@ -40,9 +41,9 @@ namespace CustomTextures
         }
 
         [HarmonyPatch(typeof(ZNetScene), "Awake")]
-        static class ZNetScene_Awake_Patch
+        public static class ZNetScene_Awake_Patch
         {
-            static void Postfix(ZNetScene __instance, Dictionary<int, GameObject> ___m_namedPrefabs)
+            public static void Postfix(ZNetScene __instance, Dictionary<int, GameObject> ___m_namedPrefabs)
             {
                 Dbgl($"ZNetScene awake");
 
@@ -59,13 +60,26 @@ namespace CustomTextures
             }
         }
 
+        
+        //[HarmonyPatch(typeof(Player), "Start")]
+        public static class Player_Start_Patch
+        {
+            public static void Prefix(Player __instance)
+            {
+                if (!modEnabled.Value || Player.m_localPlayer != __instance)
+                    return;
+                Dbgl($"Player Awake");
+                ReloadTextures(replaceLocationTextures.Value);
+            }
+        }
+
 
         
         
         [HarmonyPatch(typeof(ClutterSystem), "Awake")]
-        static class ClutterSystem_Awake_Patch
+        public static class ClutterSystem_Awake_Patch
         {
-            static void Postfix(ClutterSystem __instance)
+            public static void Postfix(ClutterSystem __instance)
             {
                 Dbgl($"Clutter system awake");
 
@@ -88,9 +102,9 @@ namespace CustomTextures
         }
 
         [HarmonyPatch(typeof(ZoneSystem), "Start")]
-        static class ZoneSystem_Start_Patch
+        public static class ZoneSystem_Start_Patch
         {
-            static void Prefix()
+            public static void Prefix()
             {
                 if (replaceLocationTextures.Value)
                 {
@@ -101,19 +115,13 @@ namespace CustomTextures
 
                     LogStopwatch("ZoneSystem Locations");
                 }
-                if (ZNetScene.instance && dumpSceneTextures.Value)
-                {
-                    string path = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "CustomTextures", "scene_dump.txt");
-                    Dbgl($"Writing {path}");
-                    File.WriteAllLines(path, outputDump);
-                    dumpSceneTextures.Value = false;
-                }
+
             }
         }
         [HarmonyPatch(typeof(VisEquipment), "Awake")]
-        static class VisEquipment_Awake_Patch
+        public static class VisEquipment_Awake_Patch
         {
-            static void Postfix(VisEquipment __instance)
+            public static void Postfix(VisEquipment __instance)
             {
                 for (int i = 0; i < __instance.m_models.Length; i++)
                 {
@@ -135,6 +143,17 @@ namespace CustomTextures
                         }
                     }
                 }
+            }
+        }
+
+        [HarmonyPatch(typeof(Humanoid), "SetupVisEquipment")]
+        public static class Humanoid_SetupVisEquipment_Patch
+        {
+            public static void Postfix(Humanoid __instance)
+            {
+                if (!modEnabled.Value)
+                    return;
+                SetupVisEquipment(__instance);
             }
         }
     }

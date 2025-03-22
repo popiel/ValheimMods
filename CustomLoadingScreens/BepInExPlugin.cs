@@ -6,16 +6,17 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace CustomLoadingScreens
 {
-    [BepInPlugin("aedenthorn.CustomLoadingScreens", "Custom Loading Screens", "0.4.0")]
+    [BepInPlugin("aedenthorn.CustomLoadingScreens", "Custom Loading Screens", "0.7.0")]
     public partial class BepInExPlugin: BaseUnityPlugin
     {
-        private static readonly bool isDebug = true;
-        private static BepInExPlugin context;
+        public static readonly bool isDebug = true;
+        public static BepInExPlugin context;
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<int> nexusID;
         public static ConfigEntry<string> loadingText;
@@ -35,24 +36,24 @@ namespace CustomLoadingScreens
         public static string[] loadingTips = new string[0];
         public static Dictionary<string, Texture2D> cachedScreens = new Dictionary<string, Texture2D>();
 
-        private static Sprite loadingSprite;
-        private static Sprite loadingSprite2;
-        private static string loadingTip;
-        private static string loadingTip2;
+        public static Sprite loadingSprite;
+        public static Sprite loadingSprite2;
+        public static string loadingTip;
+        public static string loadingTip2;
 
         public static void Dbgl(string str = "", bool pref = true)
         {
             if (isDebug)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
 
             modEnabled = Config.Bind<bool>("General", "Enabled", true, "Enable this mod");
             differentSpawnScreen = Config.Bind<bool>("General", "DifferentSpawnScreen", true, "Use a different screen for the spawn part");
             differentSpawnTip = Config.Bind<bool>("General", "DifferentSpawnTip", true, "Use a different tip for the spawn part");
-            showTipsOnLoadingScreen = Config.Bind<bool>("General", "ShowTipsOnLoadingScreen", true, "Show tips on loading screen.");
+            //showTipsOnLoadingScreen = Config.Bind<bool>("General", "ShowTipsOnLoadingScreen", true, "Show tips on loading screen.");
             spawnColorMask = Config.Bind<Color>("General", "SpawnColorMask", new Color(0.532f,0.588f, 0.853f,1f), "Change the color mask of the spawn screen (set last number to 0 to disable)");
             loadingColorMask = Config.Bind<Color>("General", "LoadingColorMask", Color.white, "Change the color mask of the initial loading screen (set to white to disable)");
             removeVignette = Config.Bind<bool>("General", "RemoveMask", true, "Remove dark edges for the spawn part");
@@ -70,7 +71,7 @@ namespace CustomLoadingScreens
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), null);
         }
 
-        private void LoadTips()
+        public void LoadTips()
         {
             string path = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "CustomLoadingScreens", "tips.txt");
             if (!File.Exists(path))
@@ -82,7 +83,7 @@ namespace CustomLoadingScreens
             loadingTips = File.ReadAllLines(path);
         }
 
-        private static void LoadCustomLoadingScreens()
+        public static void LoadCustomLoadingScreens()
         {
             loadingScreens.Clear();
             string path = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "CustomLoadingScreens");
@@ -102,7 +103,7 @@ namespace CustomLoadingScreens
 
         }
 
-        private static Sprite GetRandomLoadingScreen()
+        public static Sprite GetRandomLoadingScreen()
         {
             if (!loadingScreens.Any())
                 return null;
@@ -113,14 +114,6 @@ namespace CustomLoadingScreens
             return Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.zero, 1);
         }
 
-        [HarmonyPatch(typeof(FejdStartup), "Start")]
-        public static class FejdStartup_Start_Patch
-        {
-
-            public static void Prefix(FejdStartup __instance)
-            {
-            }
-        }
         [HarmonyPatch(typeof(FejdStartup), "LoadMainScene")]
         public static class LoadMainScene_Patch
         {
@@ -134,7 +127,7 @@ namespace CustomLoadingScreens
                 if (differentSpawnScreen.Value)
                     loadingSprite2 = GetRandomLoadingScreen();
 
-                Dbgl($"getting new random images");
+                Dbgl($"getting new random tips");
 
                 if (loadingTips.Any())
                 {
@@ -157,24 +150,6 @@ namespace CustomLoadingScreens
                 image.type = Image.Type.Simple;
                 image.preserveAspect = true;
 
-                if (loadingTips.Any() && showTipsOnLoadingScreen.Value)
-                {
-                    GameObject hud = Resources.FindObjectsOfTypeAll<GameObject>().First(g => g.name == "HUD");
-                    Instantiate(hud.transform.Find("LoadingBlack/Loading/panel_separator").gameObject, __instance.m_loading.transform);
-                    Text text = Instantiate(hud.transform.Find("LoadingBlack/Loading/Tip").gameObject, __instance.m_loading.transform).GetComponent<Text>();
-                    if (text != null)
-                    {
-                        text.text = loadingTip;
-                        text.color = tipTextColor.Value;
-                    }
-                }
-                else
-                {
-                    Text text = Instantiate(__instance.m_loading.transform.Find("Text").GetComponent<Text>(), __instance.m_loading.transform);
-                    text.text = loadingText.Value;
-                    text.color = loadingTextColor.Value;
-                }
-                __instance.m_loading.transform.Find("Text").gameObject.SetActive(false);
             }
         }
         [HarmonyPriority(Priority.First)]
@@ -202,7 +177,7 @@ namespace CustomLoadingScreens
                     if (loadingTips.Any())
                     {
                         Instantiate(Hud.instance.m_loadingTip.transform.parent.Find("panel_separator"), Hud.instance.transform.Find("LoadingBlack").transform);
-                        Text text = Instantiate(Hud.instance.m_loadingTip.gameObject, Hud.instance.transform.Find("LoadingBlack").transform).GetComponent<Text>();
+                        TMP_Text text = Instantiate(Hud.instance.m_loadingTip.gameObject, Hud.instance.transform.Find("LoadingBlack").transform).GetComponent<TMP_Text>();
                         if (text != null)
                         {
                             text.text = loadingTip;
@@ -249,9 +224,9 @@ namespace CustomLoadingScreens
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

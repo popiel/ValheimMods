@@ -11,10 +11,10 @@ using UnityEngine;
 
 namespace MapDetails
 {
-    [BepInPlugin("aedenthorn.MapDetails", "Map Details", "0.1.0")]
+    [BepInPlugin("aedenthorn.MapDetails", "Map Details", "0.4.0")]
     public partial class BepInExPlugin : BaseUnityPlugin
     {
-        private static BepInExPlugin context;
+        public static BepInExPlugin context;
 
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<bool> isDebug;
@@ -29,9 +29,11 @@ namespace MapDetails
         public static ConfigEntry<Color> unownedBuildingColor;
         public static ConfigEntry<string> customPlayerColors;
 
-        private static Vector2 lastPos = Vector2.zero;
-        private static List<int> lastPixels = new List<int>();
-        private static Texture2D mapTexture;
+        public static Vector2 lastPos = Vector2.zero;
+        public static List<int> lastPixels = new List<int>();
+        public static Texture2D mapTexture;
+        public static Texture2D tempTexture;
+        public static Dictionary<string, Color> playerColorDict = new Dictionary<string, Color>();
 
 
         public static void Dbgl(string str = "", bool pref = true)
@@ -39,7 +41,7 @@ namespace MapDetails
             if (isDebug.Value)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
 
             context = this;
@@ -56,18 +58,54 @@ namespace MapDetails
             customPlayerColors = Config.Bind<string>("Variables", "CustomPlayerColors", "", "Custom color list, comma-separated. Use either <name>:<colorCode> pair entries or just <colorCode> entries. E.g. Erinthe:FF0000 or just FF0000. The latter will assign a color randomly to each connected peer.");
 
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), null);
+
+            customPlayerColors.SettingChanged += CustomPlayerColors_SettingChanged;
+            ReloadNames();
         }
 
-        private void Update()
+        public void CustomPlayerColors_SettingChanged(object sender, EventArgs e)
+        {
+            ReloadNames();
+        }
+
+        public void ReloadNames()
+        {
+            playerColorDict.Clear();
+            if (customPlayerColors.Value.Length > 0)
+            {
+                var customColors = customPlayerColors.Value.Split(',');
+                if (customPlayerColors.Value.Contains(":"))
+                {
+                    foreach(var c in customColors)
+                    {
+                        string[] pair = c.Split(':');
+                        if(ColorUtility.TryParseHtmlString(pair[1], out Color color))
+                        {
+                            playerColorDict.Add(pair[0], color);
+
+                        }
+                    }
+
+                }
+                else if(ColorUtility.TryParseHtmlString(customColors[0], out Color color))
+                {
+                    playerColorDict.Add("?", color);
+                }
+
+            }
+            Dictionary<long, Color> assignedColors = new Dictionary<long, Color>();
+        }
+
+        public void Update()
         {
             if(Minimap.instance && Player.m_localPlayer)
                 StartCoroutine(UpdateMap(false));
         }
 
         [HarmonyPatch(typeof(Player), "PlacePiece")]
-        static class Player_PlacePiece_Patch
+        public static class Player_PlacePiece_Patch
         {
-            static void Postfix(bool __result)
+            public static void Postfix(bool __result)
             {
                 if (!modEnabled.Value || !__result)
                     return;
@@ -75,9 +113,9 @@ namespace MapDetails
             }
         }
         [HarmonyPatch(typeof(Player), "RemovePiece")]
-        static class Player_RemovePiece_Patch
+        public static class Player_RemovePiece_Patch
         {
-            static void Postfix(bool __result)
+            public static void Postfix(bool __result)
             {
                 if (!modEnabled.Value || !__result)
                     return;
@@ -86,9 +124,9 @@ namespace MapDetails
         }
 
         [HarmonyPatch(typeof(Minimap), "GenerateWorldMap")]
-        static class GenerateWorldMap_Patch
+        public static class GenerateWorldMap_Patch
         {
-            static void Postfix(Texture2D ___m_mapTexture)
+            public static void Postfix(Texture2D ___m_mapTexture)
             {
                 if (!modEnabled.Value)
                     return;
@@ -98,6 +136,8 @@ namespace MapDetails
                 mapTexture.wrapMode = TextureWrapMode.Clamp;
                 mapTexture.SetPixels32(data);
                 mapTexture.Apply();
+                tempTexture = new Texture2D(mapTexture.width, mapTexture.height, TextureFormat.RGBA32, false);
+                tempTexture.wrapMode = TextureWrapMode.Clamp;
             }
         }
 
@@ -138,7 +178,6 @@ namespace MapDetails
                             newPix = true;
                         pixels[idx] = piece.GetCreator();
                     }
-                    //Dbgl($"pos {pos}; map pos: {mx},{my} pixel pos {x},{y}; index {idx}");
                 }
             }
 
@@ -149,7 +188,7 @@ namespace MapDetails
                     if (!pixels.ContainsKey(i))
                         goto newpixels;
                 }
-                Dbgl("No new pixels");
+                //Dbgl("No new pixels");
                 yield break;
             }
             newpixels:
@@ -158,78 +197,40 @@ namespace MapDetails
 
             if (pixels.Count == 0)
             {
-                Dbgl("No pixels to add");
+                //Dbgl("No pixels to add");
                 SetMaps(mapTexture);
                 yield break;
             }
 
-            List<string> customColors = new List<string>();
-            if(customPlayerColors.Value.Length > 0)
-            {
-                customColors = customPlayerColors.Value.Split(',').ToList();
-            }
-            Dictionary<long, Color> assignedColors = new Dictionary<long, Color>();
-            bool named = customPlayerColors.Value.Contains(":");
-            
             Color32[] data = mapTexture.GetPixels32();
             foreach (var kvp in pixels)
             {
+                var player = Player.GetPlayer(kvp.Value)?.GetPlayerName();
                 Color color = Color.clear;
-                if (assignedColors.ContainsKey(kvp.Value))
+                if (player != null && !playerColorDict.TryGetValue(player, out color) && kvp.Value != 0)
                 {
-                    color = assignedColors[kvp.Value];
-                }
-                else if (customColors.Count > 0 && kvp.Value != 0)
-                {
-                    if (!named)
-                    {
-                        ColorUtility.TryParseHtmlString(customColors[0], out color);
-                        if(color != Color.clear)
-                        {
-                            assignedColors[kvp.Value] = color;
-                            customColors.RemoveAt(0);
-                        }
-                    }
-                    else 
-                    {
-                        string pair = customColors.Find(s => s.StartsWith(Player.GetPlayer(kvp.Value)?.GetPlayerName() + ":"));
-                        if (pair != null && pair.Length > 0)
-                        {
-                            ColorUtility.TryParseHtmlString(pair.Split(':')[1], out color);
-                        }
-                    } 
+                    playerColorDict.TryGetValue("?", out color);
                 }
 
                 if(color == Color.clear)
                     GetUserColor(kvp.Value, out color);
                 data[kvp.Key] = color;
-                /*
-                for (int i = 0; i < data.Length; i++)
-                {
-                    if (Vector2.Distance(new Vector2(i % mapTexture.width, i / mapTexture.width), new Vector2(kvp.Key % mapTexture.width, kvp.Key / mapTexture.width)) < 10)
-                        data[i] = kvp.Value;
-                }
-                */
-                //Dbgl($"pixel coords {kvp.Key % mapTexture.width},{kvp.Key / mapTexture.width}");
             }
 
-            Texture2D tempTexture = new Texture2D(mapTexture.width, mapTexture.height, TextureFormat.RGBA32, false);
-            tempTexture.wrapMode = TextureWrapMode.Clamp;
             tempTexture.SetPixels32(data);
             tempTexture.Apply();
 
             SetMaps(tempTexture);
 
-            Dbgl($"Added {pixels.Count} pixels");
             yield break;
         }
 
-        private static void GetUserColor(long id, out Color color)
+        public static void GetUserColor(long id, out Color color)
         {
             color = id == 0 ? unownedBuildingColor.Value : (id == Player.m_localPlayer.GetPlayerID() ? personalBuildingColor.Value : otherBuildingColor.Value);
         }
 
-        private static void SetMaps(Texture2D texture)
+        public static void SetMaps(Texture2D texture)
         {
             Minimap.instance.m_mapImageSmall.material.SetTexture("_MainTex", texture);
             Minimap.instance.m_mapImageLarge.material.SetTexture("_MainTex", texture);
@@ -241,9 +242,9 @@ namespace MapDetails
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

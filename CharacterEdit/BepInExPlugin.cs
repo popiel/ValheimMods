@@ -2,19 +2,19 @@
 using BepInEx.Configuration;
 using HarmonyLib;
 using System.Collections.Generic;
-using System.IO;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace CharacterEdit
 {
-    [BepInPlugin("aedenthorn.CharacterEdit", "Character Edit", "0.5.0")]
+    [BepInPlugin("aedenthorn.CharacterEdit", "Character Edit", "0.9.0")]
     public class BepInExPlugin : BaseUnityPlugin
     {
-        private static readonly bool isDebug = true;
-        private static bool editingCharacter = false;
-        private static BepInExPlugin context;
-        private Harmony harmony;
+        public static readonly bool isDebug = true;
+        public static bool editingCharacter = false;
+        public static BepInExPlugin context;
+        public Harmony harmony;
 
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<string> titleText;
@@ -22,14 +22,14 @@ namespace CharacterEdit
         public static ConfigEntry<string> gamePadButton;
         public static ConfigEntry<string> gamePadButtonHint;
         public static ConfigEntry<int> nexusID;
-        private static Transform title;
+        public static Transform title;
 
         public static void Dbgl(string str = "", bool pref = true)
         {
             if (isDebug)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
             modEnabled = Config.Bind<bool>("General", "Enabled", true, "Enable this mod");
@@ -46,44 +46,39 @@ namespace CharacterEdit
             harmony.PatchAll();
         }
 
-        private void OnDestroy()
-        {
-            Dbgl("Destroying plugin");
-            harmony.UnpatchAll();
-        }
-
         [HarmonyPatch(typeof(FejdStartup), "Awake")]
-        static class FejdStartup_Awake_Patch
+        public static class FejdStartup_Awake_Patch
         {
 
-            static void Postfix(FejdStartup __instance)
+            public static void Postfix(FejdStartup __instance)
             {
                 if (!modEnabled.Value)
                     return;
 
-                var edit = Instantiate(FejdStartup.instance.m_selectCharacterPanel.transform.Find("BottomWindow").Find("New"));
+                var bw = FejdStartup.instance.m_selectCharacterPanel.transform.Find("BottomWindow");
+                var edit = Instantiate(bw.Find("New"));
                 edit.name = "Edit";
-                edit.transform.SetParent(FejdStartup.instance.m_selectCharacterPanel.transform.Find("BottomWindow"));
-                edit.GetComponent<RectTransform>().anchoredPosition = new Vector3(-751, -50, 0);
-                edit.transform.Find("Text").GetComponent<Text>().text = buttonText.Value;
+                edit.transform.SetParent(bw);
+                edit.GetComponent<RectTransform>().anchoredPosition = new Vector3(-100, 50, 0);
+                edit.transform.Find("Text").GetComponent<TMP_Text>().text = buttonText.Value;
                 edit.GetComponent<Button>().onClick.RemoveAllListeners();
                 edit.GetComponent<Button>().onClick = new Button.ButtonClickedEvent();
                 edit.GetComponent<Button>().onClick.AddListener(StartCharacterEdit);
                 edit.GetComponent<UIGamePad>().m_zinputKey = gamePadButton.Value;
-                edit.transform.Find("gamepad_hint").Find("Text").GetComponent<Text>().text = gamePadButtonHint.Value;
+                edit.transform.Find("gamepad_hint").Find("Text").GetComponent<TextMeshProUGUI>().text = gamePadButtonHint.Value;
 
                 title = Instantiate(FejdStartup.instance.m_newCharacterPanel.transform.Find("Topic"));
                 title.name = "EditTitle";
                 title.SetParent(FejdStartup.instance.m_newCharacterPanel.transform);
-                title.GetComponent<Text>().text = titleText.Value;
+                title.GetComponent<TMP_Text>().text = titleText.Value;
                 title.GetComponent<RectTransform>().anchoredPosition = FejdStartup.instance.m_newCharacterPanel.transform.Find("Topic").GetComponent<RectTransform>().anchoredPosition;
                 title.gameObject.SetActive(false);
             }
         }
         [HarmonyPatch(typeof(FejdStartup), "OnNewCharacterDone")]
-        static class FejdStartup_OnNewCharacterDone_Patch
+        public static class FejdStartup_OnNewCharacterDone_Patch
         {
-            static bool Prefix(FejdStartup __instance, ref List<PlayerProfile> ___m_profiles)
+            public static bool Prefix(FejdStartup __instance, ref List<PlayerProfile> ___m_profiles)
             {
                 Dbgl($"New character done, editing {editingCharacter}");
                 if (!editingCharacter)
@@ -101,24 +96,6 @@ namespace CharacterEdit
                 Player currentPlayerInstance = Traverse.Create(FejdStartup.instance).Field("m_playerInstance").GetValue<GameObject>().GetComponent<Player>();
                 playerProfile.SavePlayerData(currentPlayerInstance);
                 playerProfile.SetName(text);
-
-                var fileNameRef = Traverse.Create(playerProfile).Field("m_filename");
-                string fileName = fileNameRef.GetValue<string>();
-
-                if(fileName != text2)
-                {
-                    string path = Path.Combine(Utils.GetSaveDataPath(), "characters");
-                    
-                    if(File.Exists(Path.Combine(path, fileName + ".fch")))
-                        File.Move(Path.Combine(path, fileName + ".fch"), Path.Combine(path, text2 + ".fch"));
-                    if (File.Exists(Path.Combine(path, fileName + ".fch.old")))
-                        File.Move(Path.Combine(path, fileName + ".fch.old"), Path.Combine(path, text2 + ".fch.old"));
-                    if (File.Exists(Path.Combine(path, fileName + ".fch.new")))
-                        File.Move(Path.Combine(path, fileName + ".fch.new"), Path.Combine(path, text2 + ".fch.new"));
-
-                    fileNameRef.SetValue(text2);
-                }
-
                 playerProfile.Save();
 
                 __instance.m_selectCharacterPanel.SetActive(true);
@@ -129,9 +106,9 @@ namespace CharacterEdit
             }
         }
         [HarmonyPatch(typeof(FejdStartup), "OnNewCharacterCancel")]
-        static class FejdStartup_OnNewCharacterCancel_Patch
+        public static class FejdStartup_OnNewCharacterCancel_Patch
         {
-            static void Postfix(FejdStartup __instance)
+            public static void Postfix(FejdStartup __instance)
             {
                 Dbgl($"New character cancel, editing {editingCharacter}");
 
@@ -143,9 +120,9 @@ namespace CharacterEdit
         }
         
         [HarmonyPatch(typeof(PlayerCustomizaton), "OnEnable")]
-        static class PlayerCustomizaton_OnEnable_Patch
+        public static class PlayerCustomizaton_OnEnable_Patch
         {
-            static void Postfix(PlayerCustomizaton __instance)
+            public static void Postfix(PlayerCustomizaton __instance)
             {
                 Dbgl($"Player customization enabled");
                 if (!editingCharacter)
@@ -174,7 +151,7 @@ namespace CharacterEdit
             }
         }
 
-        private static void StartCharacterEdit()
+        public static void StartCharacterEdit()
         {
             Dbgl($"Start editing character");
 
@@ -193,9 +170,9 @@ namespace CharacterEdit
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

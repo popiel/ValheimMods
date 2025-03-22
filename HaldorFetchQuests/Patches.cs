@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -18,16 +19,16 @@ namespace HaldorFetchQuests
     {
 
         [HarmonyPatch(typeof(ZNetScene), "Awake")]
-        static class ZNetScene_Awake_Patch
+        public static class ZNetScene_Awake_Patch
         {
-            static void Postfix(StoreGui __instance)
+            public static void Postfix(StoreGui __instance)
             {
                 if (!modEnabled.Value)
                     return;
                 currentQuestDict = null;
 
-                possibleKillList = ((Dictionary<int, GameObject>)AccessTools.Field(typeof(ZNetScene), "m_namedPrefabs").GetValue(ZNetScene.instance)).Values.ToList().FindAll(g => g.GetComponent<MonsterAI>() || g.GetComponent<AnimalAI>());
-                possibleFetchList = ObjectDB.instance.m_items.FindAll(g => g.GetComponent<ItemDrop>() && (g.GetComponent<ItemDrop>().m_itemData.m_shared.m_itemType == ItemType.Material || g.GetComponent<ItemDrop>().m_itemData.m_shared.m_itemType == ItemType.Consumable));
+                possibleKillList = ((Dictionary<int, GameObject>)AccessTools.Field(typeof(ZNetScene), "m_namedPrefabs").GetValue(ZNetScene.instance)).Values.ToList().FindAll(g => g && g.GetComponent<MonsterAI>() || g.GetComponent<AnimalAI>());
+                possibleFetchList = ObjectDB.instance.m_items.FindAll(g => g && g.GetComponent<ItemDrop>() && (g.GetComponent<ItemDrop>().m_itemData?.m_shared?.m_itemType == ItemType.Material));
                 Dbgl($"got {possibleFetchList.Count} possible fetch items and {possibleKillList.Count} possible kill items");
 
 
@@ -46,9 +47,9 @@ namespace HaldorFetchQuests
         }
 
         [HarmonyPatch(typeof(PlayerProfile), "SavePlayerToDisk")]
-        static class PlayerProfile_SavePlayerToDisk_Patch
+        public static class PlayerProfile_SavePlayerToDisk_Patch
         {
-            static void Prefix()
+            public static void Prefix()
             {
                 if (!modEnabled.Value || !ZNet.instance || !Player.m_localPlayer)
                     return;
@@ -69,9 +70,9 @@ namespace HaldorFetchQuests
         }
 
         [HarmonyPatch(typeof(Character), "RPC_Damage")]
-        static class Character_RPC_Damage_Patch
+        public static class Character_RPC_Damage_Patch
         {
-            static void Postfix(Character __instance, HitData hit)
+            public static void Postfix(Character __instance, HitData hit)
             {
                 if (!modEnabled.Value || __instance.GetHealth() > 0 || hit.GetAttacker() != Player.m_localPlayer)
                     return;
@@ -80,9 +81,9 @@ namespace HaldorFetchQuests
         }
         
         [HarmonyPatch(typeof(Inventory), "Changed")]
-        static class Inventory_Changed_Patch
+        public static class Inventory_Changed_Patch
         {
-            static void Postfix(Inventory __instance)
+            public static void Postfix(Inventory __instance)
             {
                 if (!modEnabled.Value || !Player.m_localPlayer || __instance != Player.m_localPlayer.GetInventory())
                     return;
@@ -91,9 +92,9 @@ namespace HaldorFetchQuests
         }
 
         [HarmonyPatch(typeof(StoreGui), "Show")]
-        static class StoreGui_Show_Patch
+        public static class StoreGui_Show_Patch
         {
-            static void Prefix(StoreGui __instance)
+            public static void Prefix(StoreGui __instance)
             {
                 if (!modEnabled.Value)
                     return;
@@ -102,35 +103,35 @@ namespace HaldorFetchQuests
         }
         
         [HarmonyPatch(typeof(StoreGui), "UpdateBuyButton")]
-        static class StoreGui_UpdateBuyButton_Patch
+        public static class StoreGui_UpdateBuyButton_Patch
         {
-            static void Postfix(StoreGui __instance, Trader.TradeItem ___m_selectedItem)
+            public static void Postfix(StoreGui __instance, Trader.TradeItem ___m_selectedItem)
             {
                 if (!modEnabled.Value || ___m_selectedItem == null)
                     return;
 
                 if(buyButtonText == "")
                 {
-                    buyButtonText = __instance.m_buyButton.GetComponentInChildren<Text>().text;
+                    buyButtonText = __instance.m_buyButton.GetComponentInChildren<TMP_Text>().text;
                 }
 
                 if (currentQuestDict != null && currentQuestDict.ContainsKey(___m_selectedItem.m_prefab.m_itemData.m_crafterName))
                 {
-                    __instance.m_buyButton.GetComponentInChildren<Text>().text = acceptButtonText.Value;
+                    __instance.m_buyButton.GetComponentInChildren<TMP_Text>().text = acceptButtonText.Value;
                     __instance.m_buyButton.interactable = true;
                     __instance.m_buyButton.GetComponent<UITooltip>().m_text = "";
                 }
                 else
                 {
-                    __instance.m_buyButton.GetComponentInChildren<Text>().text = buyButtonText;
+                    __instance.m_buyButton.GetComponentInChildren<TMP_Text>().text = buyButtonText;
                 }
             }
         }
 
         [HarmonyPatch(typeof(StoreGui), "BuySelectedItem")]
-        static class StoreGui_BuySelectedItem_Patch
+        public static class StoreGui_BuySelectedItem_Patch
         {
-            static bool Prefix(StoreGui __instance, Trader ___m_trader, Trader.TradeItem ___m_selectedItem)
+            public static bool Prefix(StoreGui __instance, Trader ___m_trader, Trader.TradeItem ___m_selectedItem)
             {
                 if (!modEnabled.Value)
                     return true;
@@ -163,9 +164,9 @@ namespace HaldorFetchQuests
         }
 
         [HarmonyPatch(typeof(StoreGui), "FillList")]
-        static class StoreGui_FillList_Patch
+        public static class StoreGui_FillList_Patch
         {
-            static void Prefix(StoreGui __instance, Trader ___m_trader)
+            public static void Prefix(StoreGui __instance, Trader ___m_trader)
             {
                 for(int i = ___m_trader.m_items.Count - 1; i >= 0; i--)
                 {
@@ -178,25 +179,20 @@ namespace HaldorFetchQuests
                     RefreshCurrentQuests();
                 }
             }
-            static void Postfix(StoreGui __instance, Trader ___m_trader, List<GameObject> ___m_itemList)
+            public static void Postfix(StoreGui __instance, Trader ___m_trader, List<GameObject> ___m_itemList)
             {
-                if (!modEnabled.Value)
+                if (!modEnabled.Value || currentQuestDict is null || Chainloader.PluginInfos.ContainsKey("Menthus.bepinex.plugins.BetterTrader"))
                     return;
 
-
-                if (Chainloader.PluginInfos.ContainsKey("Menthus.bepinex.plugins.BetterTrader"))
-                {
-                    return;
-                }
-
-                int i = ___m_trader.m_items.Count;
+                int index = ___m_trader.m_items.Count;
 
                 Dbgl($"Adding {currentQuestDict.Count} quests to trader");
-                foreach (FetchQuestData fqd in currentQuestDict.Values)
+                foreach(var fqd in currentQuestDict.Values)
                 {
-                    Dbgl($"{fqd.ID}");
 
-                    ItemDrop id = new GameObject().AddComponent<ItemDrop>();
+                    Dbgl($"{fqd.ID}");
+                    ItemDrop.ItemData data = new ItemDrop.ItemData() { m_shared = new SharedData() };
+                    ItemDrop id = new ItemDrop() { m_itemData = data };
                     id.m_itemData.m_crafterName = fqd.ID;
                     ___m_trader.m_items.Add(new Trader.TradeItem()
                     {
@@ -209,16 +205,23 @@ namespace HaldorFetchQuests
 
                     GameObject buttonObject = Instantiate(__instance.m_listElement, __instance.m_listRoot);
                     buttonObject.SetActive(true);
-                    (buttonObject.transform as RectTransform).anchoredPosition = new Vector2(0f, i++ * -__instance.m_itemSpacing);
+                    (buttonObject.transform as RectTransform).anchoredPosition = new Vector2(0f, index++ * -__instance.m_itemSpacing);
                     Image component = buttonObject.transform.Find("icon").GetComponent<Image>();
                     if (fqd.type == FetchType.Fetch)
                     {
-                        component.sprite = ObjectDB.instance.m_items.Find(g => g.GetComponent<ItemDrop>().m_itemData.m_shared.m_name == fqd.thing).GetComponent<ItemDrop>().m_itemData.m_shared.m_icons[0];
+                        try
+                        {
+                            component.sprite = ObjectDB.instance.m_items.Find(g => g.GetComponent<ItemDrop>().m_itemData.m_shared.m_name == fqd.thing).GetComponent<ItemDrop>().m_itemData.m_shared.m_icons[0];
+                        }
+                        catch
+                        {
+                            Dbgl($"error getting sprite for {fqd.thing}");
+                        }
                     }
                     component.color = active ? new Color(1f, 0f, 1f, 0f) : Color.white;
 
                     string name = fqd.type == FetchType.Fetch ? fetchQuestString.Value : killQuestString.Value;
-                    Text nameText = buttonObject.transform.Find("name").GetComponent<Text>();
+                    TMP_Text nameText = buttonObject.transform.Find("name").GetComponent<TMP_Text>();
                     nameText.text = name;
                     nameText.color = active ? Color.grey : Color.white;
 
@@ -227,7 +230,7 @@ namespace HaldorFetchQuests
                     UITooltip tooltip = buttonObject.GetComponent<UITooltip>();
                     tooltip.m_topic = name;
                     tooltip.m_text = desc;
-                    Text rewardText = Utils.FindChild(buttonObject.transform, "price").GetComponent<Text>();
+                    TMP_Text rewardText = Utils.FindChild(buttonObject.transform, "price").GetComponent<TMP_Text>();
                     rewardText.text = fqd.reward + "";
                     if (active)
                         rewardText.color = Color.grey;
@@ -242,9 +245,9 @@ namespace HaldorFetchQuests
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;
@@ -253,22 +256,22 @@ namespace HaldorFetchQuests
                 {
                     context.Config.Reload();
                     context.Config.Save();
-                    AccessTools.Method(typeof(Terminal), "AddString").Invoke(__instance, new object[] { text });
-                    AccessTools.Method(typeof(Terminal), "AddString").Invoke(__instance, new object[] { $"{context.Info.Metadata.Name} config reloaded" });
+                    __instance.AddString( text );
+                    __instance.AddString( $"{context.Info.Metadata.Name} config reloaded" );
                     return false;
                 }
                 if (text.ToLower().Equals($"{typeof(BepInExPlugin).Namespace.ToLower()} refresh"))
                 {
                     RefreshCurrentQuests();
-                    AccessTools.Method(typeof(Terminal), "AddString").Invoke(__instance, new object[] { text });
-                    AccessTools.Method(typeof(Terminal), "AddString").Invoke(__instance, new object[] { $"{context.Info.Metadata.Name} quests refreshed" });
+                    __instance.AddString( text );
+                    __instance.AddString( $"{context.Info.Metadata.Name} quests refreshed" );
                     return false;
                 }
                 return true;
             }
         }
 
-        private static bool BetterTrader_ItemElementUI_UpdateTradePrice_Prefix(Text ___tradePriceSliderText)
+        public static bool BetterTrader_ItemElementUI_UpdateTradePrice_Prefix(Text ___tradePriceSliderText)
         {
             if (!modEnabled.Value)
                 return true;
@@ -282,7 +285,7 @@ namespace HaldorFetchQuests
             return false;
         }
         
-        private static void BetterTrader_ItemElementUI_UpdateTint_Prefix(object __instance, ref bool tinted)
+        public static void BetterTrader_ItemElementUI_UpdateTint_Prefix(object __instance, ref bool tinted)
         {
             if (!modEnabled.Value || (((Text)AccessTools.Field(__instance.GetType(), "itemNameText").GetValue(__instance)).text != fetchQuestString.Value && ((Text)AccessTools.Field(__instance.GetType(), "itemNameText").GetValue(__instance)).text != killQuestString.Value))
                 return;
@@ -290,7 +293,7 @@ namespace HaldorFetchQuests
             tinted = false;
         }
 
-        private static bool BetterTrader_ItemElementUI_SetSelectionIndicatorActive_Prefix(object __instance)
+        public static bool BetterTrader_ItemElementUI_SetSelectionIndicatorActive_Prefix(object __instance)
         {
             if (!modEnabled.Value || (((Text)AccessTools.Field(__instance.GetType(), "itemNameText").GetValue(__instance)).text != fetchQuestString.Value && ((Text)AccessTools.Field(__instance.GetType(), "itemNameText").GetValue(__instance)).text != killQuestString.Value))
                 return true;
@@ -298,7 +301,7 @@ namespace HaldorFetchQuests
             return false;
         }
 
-        private static void BetterTrader_ItemElementUIListView_SetupElements_Prefix(object __instance, List<object> itemElements)
+        public static void BetterTrader_ItemElementUIListView_SetupElements_Prefix(object __instance, List<object> itemElements)
         {
             if (!modEnabled.Value || (int)AccessTools.Field(itemElements[0].GetType(), "type").GetValue(itemElements[0]) != 0)
                 return;
@@ -342,7 +345,7 @@ namespace HaldorFetchQuests
             }
         }
 
-        private static void OnBuyBetterTraderItem(FetchQuestData fqd)
+        public static void OnBuyBetterTraderItem(FetchQuestData fqd)
         {
 
             QuestFrameworkAPI.AddQuest(MakeQuestData(currentQuestDict[fqd.ID]));
@@ -361,12 +364,12 @@ namespace HaldorFetchQuests
             AdjustFetchQuests();
         }
 
-        private static void OnClickBetterTraderItem(FetchQuestData fqd, object itemElement)
+        public static void OnClickBetterTraderItem(FetchQuestData fqd, object itemElement)
         {
             Dbgl($"Clicked better trader item {fqd.ID}");
-            ItemDrop id = new GameObject().AddComponent<ItemDrop>();
+            ItemDrop.ItemData data = new ItemDrop.ItemData() { m_shared = new SharedData() };
+            ItemDrop id = new ItemDrop() { m_itemData = data };
             id.m_itemData.m_crafterName = fqd.ID;
-            id.m_itemData.m_shared = new SharedData();
             Trader.TradeItem value = new Trader.TradeItem()
             {
                 m_prefab = id,

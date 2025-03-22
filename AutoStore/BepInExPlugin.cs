@@ -7,10 +7,10 @@ using UnityEngine;
 
 namespace AutoStore
 {
-    [BepInPlugin("aedenthorn.AutoStore", "Auto Store", "0.4.1")]
+    [BepInPlugin("aedenthorn.AutoStore", "Auto Store", "0.7.0")]
     public class BepInExPlugin: BaseUnityPlugin
     {
-        private static readonly bool isDebug = true;
+        public static readonly bool isDebug = true;
 
         public static ConfigEntry<float> dropRangeChests;
         public static ConfigEntry<float> dropRangePersonalChests;
@@ -36,18 +36,19 @@ namespace AutoStore
         public static ConfigEntry<string> toggleString;
 
         public static ConfigEntry<bool> mustHaveItemToPull;
+        public static ConfigEntry<bool> pullWhileBuilding;
         public static ConfigEntry<bool> isOn;
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<int> nexusID;
 
-        private static BepInExPlugin context;
+        public static BepInExPlugin context;
 
         public static void Dbgl(string str = "", bool pref = true)
         {
             if (isDebug)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
             dropRangeChests = Config.Bind<float>("General", "DropRangeChests", 5f, "The maximum range to pull dropped items");
@@ -72,6 +73,7 @@ namespace AutoStore
             toggleString = Config.Bind<string>("General", "ToggleString", "Auto Pull: {0}", "Text to show on toggle. {0} is replaced with true/false");
             toggleKey = Config.Bind<string>("General", "ToggleKey", "", "Key to toggle behaviour. Leave blank to disable the toggle key. Use https://docs.unity3d.com/Manual/class-InputManager.html syntax.");
             mustHaveItemToPull = Config.Bind<bool>("General", "MustHaveItemToPull", false, "If true, a container must already have at least one of the item to pull.");
+            pullWhileBuilding = Config.Bind<bool>("General", "PullWhileBuilding", true, "If false, containers won't pull while the player is holding the hammer.");
             isOn = Config.Bind<bool>("General", "IsOn", true, "Behaviour is currently on or not");
             
             
@@ -84,7 +86,7 @@ namespace AutoStore
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), null);
         }
 
-        private void Update()
+        public void Update()
         {
             if (!modEnabled.Value || AedenthornUtils.IgnoreKeyPresses())
                 return;
@@ -96,7 +98,7 @@ namespace AutoStore
             }
 
         }
-        private static bool DisallowItem(Container container, ItemDrop.ItemData item)
+        public static bool DisallowItem(Container container, ItemDrop.ItemData item)
         {
             string name = item.m_dropPrefab.name;
             if (itemAllowTypes.Value != null && itemAllowTypes.Value.Length > 0 && !itemAllowTypes.Value.Split(',').Contains(name))
@@ -159,7 +161,7 @@ namespace AutoStore
             return true;
         }
 
-        private static float ContainerRange(Container container)
+        public static float ContainerRange(Container container)
         {
             if (container.GetInventory() == null)
                 return -1f;
@@ -190,11 +192,11 @@ namespace AutoStore
         }
 
         [HarmonyPatch(typeof(Container), "CheckForChanges")]
-        static class Container_CheckForChanges_Patch
+        public static class Container_CheckForChanges_Patch
         {
-            static void Postfix(Container __instance, ZNetView ___m_nview)
+            public static void Postfix(Container __instance, ZNetView ___m_nview)
             {
-                if (!isOn.Value || ___m_nview == null || ___m_nview.GetZDO() == null)
+                if (!isOn.Value || ___m_nview == null || ___m_nview.GetZDO() == null || (!pullWhileBuilding.Value && (((ItemDrop.ItemData)AccessTools.Method(typeof(Player), "GetLeftItem").Invoke(Player.m_localPlayer, new object[0]))?.m_shared?.m_buildPieces.m_pieces.Count > 0 || ((ItemDrop.ItemData)AccessTools.Method(typeof(Player), "GetRightItem").Invoke(Player.m_localPlayer, new object[0]))?.m_shared?.m_buildPieces.m_pieces.Count > 0)))
                     return;
 
                 Vector3 position = __instance.transform.position + Vector3.up;
@@ -220,23 +222,21 @@ namespace AutoStore
             }
         }
 
-        private static bool TryStoreItem(Container __instance, ref ItemDrop.ItemData item)
+        public static bool TryStoreItem(Container __instance, ref ItemDrop.ItemData item)
         {
 
             if (DisallowItem(__instance, item))
                 return false;
 
-            Dbgl($"auto storing {item.m_dropPrefab.name} from ground");
-
+            //Dbgl($"auto storing {item.m_dropPrefab.name} from ground");
+            bool changed = false;
             while (item.m_stack > 1 && __instance.GetInventory().CanAddItem(item, 1))
             {
+                changed = true;
                 item.m_stack--;
                 ItemDrop.ItemData newItem = item.Clone();
                 newItem.m_stack = 1;
                 __instance.GetInventory().AddItem(newItem);
-                Traverse.Create(item).Method("Save").GetValue();
-                typeof(Container).GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance, new object[] { });
-                typeof(Inventory).GetMethod("Changed", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance.GetInventory(), new object[] { });
             }
 
             if (item.m_stack == 1 && __instance.GetInventory().CanAddItem(item, 1))
@@ -244,17 +244,18 @@ namespace AutoStore
                 ItemDrop.ItemData newItem = item.Clone();
                 item.m_stack = 0;
                 __instance.GetInventory().AddItem(newItem);
-                typeof(Container).GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance, new object[] { });
-                typeof(Inventory).GetMethod("Changed", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance.GetInventory(), new object[] { });
-                return true;
+                changed = true;
             }
-            return false;
+            if(changed)
+                AccessTools.Method(typeof(Container), "Save").Invoke(__instance, new object[] { });
+
+            return changed;
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

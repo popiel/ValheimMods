@@ -4,12 +4,11 @@ using HarmonyLib;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace AutoFeed
 {
-    [BepInPlugin("aedenthorn.AutoFeed", "Auto Feed", "0.6.2")]
+    [BepInPlugin("aedenthorn.AutoFeed", "Auto Feed", "0.9.1")]
     public class BepInExPlugin: BaseUnityPlugin
     {
         public static ConfigEntry<bool> isDebug;
@@ -18,6 +17,7 @@ namespace AutoFeed
         public static ConfigEntry<float> moveProximity;
         public static ConfigEntry<string> feedDisallowTypes;
         public static ConfigEntry<string> animalDisallowTypes;
+        public static ConfigEntry<string> containerNameStartsWith;
         public static ConfigEntry<string> toggleKey;
         public static ConfigEntry<string> toggleString;
         public static ConfigEntry<bool> isOn;
@@ -26,17 +26,14 @@ namespace AutoFeed
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<int> nexusID;
 
-        private static BepInExPlugin context;
-        private static float lastFeed;
-        private static int feedCount;
+        public static BepInExPlugin context;
 
-
-        public static void Dbgl(string str = "", bool pref = true)
+        public static void Dbgl(string str = "", bool pref = false, BepInEx.Logging.LogLevel logLevel = BepInEx.Logging.LogLevel.Debug)
         {
             if (isDebug.Value)
-                Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
+                context.Logger.Log(logLevel, (pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
             containerRange = Config.Bind<float>("Config", "ContainerRange", 10f, "Container range in metres.");
@@ -45,11 +42,12 @@ namespace AutoFeed
             requireMove = Config.Bind<bool>("Config", "RequireMove", true, "Require animals to move to container to feed.");
             requireOnlyFood = Config.Bind<bool>("Config", "RequireOnlyFood", false, "Don't allow feeding from containers that have items that the animal will not eat as well.");
             moveProximity = Config.Bind<float>("Config", "MoveProximity", 2f, "How close to move towards the container if RequireMove is true.");
-            
+            containerNameStartsWith = Config.Bind<string>("Config", "ContainerNameFilter", "piece_chest, Container", "Only feed from containers which's name start like this, comma-separated.");
+
             toggleKey = Config.Bind<string>("General", "ToggleKey", "", "Key to toggle behaviour. Leave blank to disable the toggle key. Use https://docs.unity3d.com/Manual/ConventionalGameInput.html");
             toggleString = Config.Bind<string>("General", "ToggleString", "Auto Feed: {0}", "Text to show on toggle. {0} is replaced with true/false");
             modEnabled = Config.Bind<bool>("General", "Enabled", true, "Enable this mod");
-            isDebug = Config.Bind<bool>("General", "IsDebug", true, "Show debug logs");
+            isDebug = Config.Bind<bool>("General", "IsDebug", false, "Show debug logs");
             nexusID = Config.Bind<int>("General", "NexusID", 985, "Nexus mod ID for updates");
             
             isOn = Config.Bind<bool>("ZAuto", "IsOn", true, "Behaviour is currently on or not");
@@ -60,7 +58,7 @@ namespace AutoFeed
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), null);
         }
 
-        private void Update()
+        public void Update()
         {
             if (AedenthornUtils.CheckKeyDown(toggleKey.Value) && !AedenthornUtils.IgnoreKeyPresses(true))
             {
@@ -70,7 +68,7 @@ namespace AutoFeed
             }
 
         }
-        private static string GetPrefabName(string name)
+        public static string GetPrefabName(string name)
         {
             char[] anyOf = new char[]{'(',' '};
             int num = name.IndexOfAny(anyOf);
@@ -82,170 +80,122 @@ namespace AutoFeed
             return result;
         }
 
-        public static List<Container> GetNearbyContainers(Vector3 center, float range, MonsterAI monsterAI)
+        [HarmonyPatch(typeof(MonsterAI), "UpdateConsumeItem")]
+        public static class UpdateConsumeItem_Patch
         {
-            try { 
-                List<Container> containers = new List<Container>();
+            public static void Postfix(MonsterAI __instance, ZNetView ___m_nview, Character ___m_character, Tameable ___m_tamable, List<ItemDrop> ___m_consumeItems, float dt, bool __result)
+            {
+                string name = GetPrefabName(__instance.gameObject.name);
+                if (!modEnabled.Value || !isOn.Value
+                    || __result || !___m_character || !___m_nview || !___m_nview.IsOwner()
+                    || ___m_tamable == null || !___m_character.IsTamed() || !___m_tamable.IsHungry()
+                    || ___m_consumeItems == null || ___m_consumeItems.Count == 0
+                    || animalDisallowTypes.Value.Split(',').Contains(name))
+                {
+                    return;
+                }
 
-                foreach (Collider collider in Physics.OverlapSphere(center, Mathf.Max(range, 0), LayerMask.GetMask(new string[] { "piece" })))
+                Vector3 instancePosition = __instance.gameObject.transform.position;
+                Traverse traverseAI = Traverse.Create(__instance);
+                // Types like "HorseSize" seem to not work when Deer is tamed
+                traverseAI.Field("m_pathAgentType").SetValue(Pathfinding.AgentType.Humanoid);
+                Container closestContainer = null;
+                Vector3 closestContainerPosition = new Vector3(0f, 0f, 0f);
+                float closestContainerDistance = containerRange.Value + 1;
+                foreach (Collider collider in Physics.OverlapSphere(instancePosition, Mathf.Max(containerRange.Value, 0), LayerMask.GetMask(new string[] { "piece" })))
                 {
                     Container container = collider.transform.parent?.parent?.gameObject?.GetComponent<Container>();
-                    if (container?.GetComponent<ZNetView>()?.IsValid() != true)
-                        continue;
-                    if ((container.name.StartsWith("piece_chest") || container.name.StartsWith("Container")) && container.GetInventory() != null)
+                    if (container?.GetComponent<ZNetView>()?.IsValid() == true)
                     {
-                        if (requireOnlyFood.Value)
+                        //Dbgl($"{__instance.gameObject.name} valid found");
+                        foreach (string containerNameStart in containerNameStartsWith.Value.Split(','))
                         {
-                            foreach(ItemDrop.ItemData item in container.GetInventory().GetAllItems())
+                            if (container.name.StartsWith(containerNameStart) && container.GetInventory() != null)
                             {
-                                if(!monsterAI.m_consumeItems.Exists(i => i.m_itemData.m_shared.m_name == item.m_shared.m_name))
-                                    continue;
+                                //Dbgl($"{__instance.gameObject.name} trough");
+                                Vector3 containerPosition = container.transform.position;
+                                float distance = Vector3.Distance(containerPosition, instancePosition);
+                                //Dbgl($"{__instance.gameObject.name} agentType: {traverseAI.Field("m_pathAgentType")}"); 
+                                if (distance < moveProximity.Value
+                                    || traverseAI.Method("HavePath", new object[] { containerPosition }).GetValue<bool>())
+                                {
+                                    //Dbgl($"{__instance.gameObject.name} path");
+                                    bool foundInedibleItem = true;
+                                    bool foundEdibleItem = false;
+                                    foreach (ItemDrop.ItemData item in container.GetInventory().GetAllItems())
+                                    {
+                                        if (__instance.m_consumeItems.Exists(i => i.m_itemData.m_shared.m_name == item.m_shared.m_name)
+                                            && !feedDisallowTypes.Value.Split(',').Contains(item.m_dropPrefab.name))
+                                        {
+                                            foundEdibleItem = true;
+                                            if (!requireOnlyFood.Value)
+                                            {
+                                                //Dbgl($"{__instance.gameObject.name} food found");
+                                                break;
+                                            }
+                                        }
+                                        else if (requireOnlyFood.Value)
+                                        {
+                                            //Dbgl($"{__instance.gameObject.name} inedible found");
+                                            foundInedibleItem = false;
+                                            break;
+                                        }
+                                    }
+
+                                    if (foundInedibleItem && foundEdibleItem && closestContainerDistance > distance)
+                                    {
+                                        closestContainer = container;
+                                        closestContainerDistance = distance;
+                                        closestContainerPosition = containerPosition;
+                                    }
+                                }
                             }
                         }
-                        containers.Add(container);
                     }
                 }
-                containers.OrderBy(c => Vector3.Distance(c.transform.position, center));
-                return containers;
-            }
-            catch
-            {
-                return new List<Container>();
-            }
-        }
 
-        [HarmonyPatch(typeof(MonsterAI), "UpdateConsumeItem")]
-        static class UpdateConsumeItem_Patch
-        {
-            static void Postfix(MonsterAI __instance, ZNetView ___m_nview, Character ___m_character, Tameable ___m_tamable, List<ItemDrop> ___m_consumeItems, float dt, bool __result)
-            {
-                if (!modEnabled.Value || !isOn.Value || __result || !___m_character || !___m_nview || !___m_nview.IsOwner() || ___m_tamable == null || !___m_tamable.IsHungry() || ___m_consumeItems == null || ___m_consumeItems.Count == 0)
-                    return;
-
-                string name = GetPrefabName(__instance.gameObject.name);
-
-                if (animalDisallowTypes.Value.Split(',').Contains(name))
+                if (closestContainer != null)
                 {
-                    return;
-                }
-
-                var nearbyContainers = GetNearbyContainers(___m_character.gameObject.transform.position, containerRange.Value, __instance);
-
-                using (List<ItemDrop>.Enumerator enumerator = __instance.m_consumeItems.GetEnumerator())
-                {
-                    while (enumerator.MoveNext())
+                    Dbgl($"{__instance.gameObject.name} found container: {closestContainerPosition}");
+                    if (requireMove.Value)
                     {
-                        foreach (Container c in nearbyContainers)
+                        Dbgl($"{__instance.gameObject.name} {instancePosition} trying to move to {closestContainerPosition} {Utils.DistanceXZ(instancePosition, closestContainerPosition)}");
+
+                        traverseAI.Field("m_lastFindPathTime").SetValue(0);
+                        if (!traverseAI.Method("MoveTo", new object[] { 0.05f, closestContainerPosition, moveProximity.Value, false }).GetValue<bool>())
+                            return;
+
+                        traverseAI.Method("LookAt", new object[] { closestContainerPosition }).GetValue();
+                        if (!traverseAI.Method("IsLookingAt", new object[] { closestContainerPosition, 20f, false }).GetValue<bool>())
+                            return;
+                    }
+
+                    using (List<ItemDrop>.Enumerator enumerator = __instance.m_consumeItems.GetEnumerator())
+                    {
+                        while (enumerator.MoveNext())
                         {
-                            if (Utils.DistanceXZ(c.transform.position, __instance.transform.position) < moveProximity.Value && Mathf.Abs(c.transform.position.y - __instance.transform.position.y) > moveProximity.Value)
-                                continue;
-
-                            ItemDrop.ItemData item = c.GetInventory().GetItem(enumerator.Current.m_itemData.m_shared.m_name);
-                            if (item != null)
+                            ItemDrop.ItemData item = closestContainer.GetInventory().GetItem(enumerator.Current.m_itemData.m_shared.m_name);
+                            if (item != null && !feedDisallowTypes.Value.Split(',').Contains(item.m_dropPrefab.name))
                             {
-                                if (feedDisallowTypes.Value.Split(',').Contains(item.m_dropPrefab.name))
-                                {
-                                    continue;
-                                }
+                                Dbgl($"{__instance.gameObject.name} {instancePosition} consuming {item.m_dropPrefab.name} at {closestContainerPosition}, distance {Utils.DistanceXZ(instancePosition, closestContainerPosition)}");
+                                ConsumeItem(item, __instance, ___m_character);
 
-                                if (Time.time - lastFeed < 0.1)
-                                {
-                                    feedCount++;
-                                    FeedAnimal(__instance, ___m_tamable, ___m_character, c, item, feedCount * 33);
-                                }
-                                else
-                                {
-                                    feedCount = 0;
-                                    lastFeed = Time.time;
-                                    FeedAnimal(__instance, ___m_tamable, ___m_character, c, item, 0);
-                                }
+                                closestContainer.GetInventory().RemoveItem(item.m_shared.m_name, 1);
+                                typeof(Inventory).GetMethod("Changed", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(closestContainer.GetInventory(), new object[] { });
+                                typeof(Container).GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(closestContainer, new object[] { });
                                 return;
                             }
                         }
                     }
                 }
-            }
-        }
-        public static async void FeedAnimal(MonsterAI monsterAI, Tameable tamable, Character character, Container c, ItemDrop.ItemData item, int delay)
-        {
-            await Task.Delay(delay);
-
-            if (tamable == null || !tamable.IsHungry())
-                return;
-
-            if (requireOnlyFood.Value)
-            {
-                foreach (ItemDrop.ItemData temp in c.GetInventory().GetAllItems())
+                else
                 {
-                    if (!monsterAI.m_consumeItems.Exists(i => i.m_itemData.m_shared.m_name == temp.m_shared.m_name))
-                        return;
+                    Dbgl($"{__instance.gameObject.name} could not find container");
                 }
             }
-
-
-            if (requireMove.Value)
-            {
-                //Dbgl($"{monsterAI.gameObject.name} {monsterAI.transform.position} trying to move to {c.transform.position} {Utils.DistanceXZ(monsterAI.transform.position, c.transform.position)}");
-
-                ZoneSystem.instance.GetGroundHeight(c.transform.position, out float ground);
-
-                Vector3 groundTarget = new Vector3(c.transform.position.x, ground, c.transform.position.z);
-
-                Traverse traverseAI = Traverse.Create(monsterAI);
-                traverseAI.Field("m_lastFindPathTime").SetValue(0);
-
-                if (!traverseAI.Method("MoveTo", new object[] { 0.05f, groundTarget, moveProximity.Value, false }).GetValue<bool>())
-                    return;
-
-                if (Mathf.Abs(c.transform.position.y - monsterAI.transform.position.y) > moveProximity.Value)
-                    return;
-
-                /*
-                Vector3 characterPos = monsterAI.transform.position;
-                bool snap1 = (bool)typeof(Pathfinding).GetMethod("SnapToNavMesh", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(Pathfinding.instance, new object[] { characterPos, typeof(Pathfinding).GetMethod("GetSettings", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(Pathfinding.instance, new object[] { Pathfinding.AgentType.Humanoid }) });
-                bool snap2 = (bool)typeof(Pathfinding).GetMethod("SnapToNavMesh", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(Pathfinding.instance, new object[] { groundTarget, typeof(Pathfinding).GetMethod("GetSettings", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(Pathfinding.instance, new object[] { Pathfinding.AgentType.Humanoid }) });
-
-                object settings = typeof(Pathfinding).GetMethod("GetSettings", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(Pathfinding.instance, new object[] { Pathfinding.AgentType.Humanoid });
-                typeof(Pathfinding).GetMethod("SnapToNavMesh", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(Pathfinding.instance, new object[] { groundTarget, settings });
-
-                NavMeshQueryFilter filter = new NavMeshQueryFilter
-                {
-                    agentTypeID = ((NavMeshBuildSettings)settings.GetType().GetField("m_build", BindingFlags.Public | BindingFlags.Instance).GetValue(settings)).agentTypeID,
-                    areaMask = (int)settings.GetType().GetField("m_areaMask", BindingFlags.Public | BindingFlags.Instance).GetValue(settings)
-                };
-
-                bool path = NavMesh.CalculatePath(characterPos, groundTarget, filter, (NavMeshPath)typeof(Pathfinding).GetField("m_path", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Pathfinding.instance));
-
-                Dbgl($"snapped1 {snap1}");
-                Dbgl($"snapped2 {snap2}");
-                Dbgl($"path exists {path} {((NavMeshPath)typeof(Pathfinding).GetField("m_path", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(Pathfinding.instance)).status}");
-                Dbgl($"found path {traverseAI.Method("FindPath", new object[] { groundTarget }).GetValue<bool>()}");
-                Dbgl($"{Time.time - traverseAI.Field("m_lastFindPathTime").GetValue<float>()} {traverseAI.Field("m_lastFindPathTarget").GetValue<Vector3>()} {traverseAI.Field("m_lastFindPathResult").GetValue<bool>()} {traverseAI.Field("m_pathAgentType").GetValue<Pathfinding.AgentType>()}");
-                //Dbgl($"{monsterAI.gameObject.name} moved to");
-                */
-
-
-
-                traverseAI.Method("LookAt", new object[] { c.transform.position }).GetValue();
-                
-                if (!traverseAI.Method("IsLookingAt", new object[] { c.transform.position, 90f }).GetValue<bool>())
-                    return;
-
-
-                traverseAI.Field("m_aiStatus").SetValue("Consume item");
-
-                //Dbgl($"{monsterAI.gameObject.name} looking at");
-            }
-
-            Dbgl($"{monsterAI.gameObject.name} {monsterAI.transform.position} consuming {item.m_dropPrefab.name} at {c.transform.position}, distance {Utils.DistanceXZ(monsterAI.transform.position, c.transform.position)}");
-            ConsumeItem(item, monsterAI, character);
-
-            c.GetInventory().RemoveItem(item.m_shared.m_name, 1);
-            typeof(Inventory).GetMethod("Changed", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(c.GetInventory(), new object[] { });
-            typeof(Container).GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(c, new object[] { });
         }
 
-        private static void ConsumeItem(ItemDrop.ItemData item, MonsterAI monsterAI, Character character)
+        public static void ConsumeItem(ItemDrop.ItemData item, MonsterAI monsterAI, Character character)
         {
             monsterAI.m_onConsumedItem?.Invoke(null);
 
@@ -254,9 +204,9 @@ namespace AutoFeed
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;
@@ -266,8 +216,8 @@ namespace AutoFeed
                     context.Config.Reload();
                     context.Config.Save();
 
-                    __instance.AddString(text);
-                    __instance.AddString($"{context.Info.Metadata.Name} config reloaded");
+                    Traverse.Create(__instance).Method("AddString", new object[] { text }).GetValue();
+                    Traverse.Create(__instance).Method("AddString", new object[] { $"{context.Info.Metadata.Name} config reloaded" }).GetValue();
                     return false;
                 }
                 return true;

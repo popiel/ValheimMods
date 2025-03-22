@@ -10,10 +10,10 @@ using UnityEngine;
 
 namespace CustomWeaponStats
 {
-    [BepInPlugin("aedenthorn.CustomWeaponStats", "Custom Weapon Stats", "0.6.1")]
+    [BepInPlugin("aedenthorn.CustomWeaponStats", "Custom Weapon Stats", "0.7.0")]
     public partial class BepInExPlugin : BaseUnityPlugin
     {
-        private static BepInExPlugin context;
+        public static BepInExPlugin context;
 
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<bool> isDebug;
@@ -26,15 +26,15 @@ namespace CustomWeaponStats
         public static ConfigEntry<float> globalHoldDurationMinMultiplier;
         public static ConfigEntry<float> globalHoldStaminaDrainMultiplier;
         public static ConfigEntry<float> globalAttackStaminaUseMultiplier;
-        private static List<WeaponData> weaponDatas;
-        private static string assetPath;
+        public static List<WeaponData> weaponDatas;
+        public static string assetPath;
 
         public static void Dbgl(string str = "", bool pref = true)
         {
             if (isDebug.Value)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
 
             context = this;
@@ -56,9 +56,9 @@ namespace CustomWeaponStats
         }
 
         [HarmonyPatch(typeof(ObjectDB), "CopyOtherDB")]
-        static class CopyOtherDB_Patch
+        public static class CopyOtherDB_Patch
         {
-            static void Postfix()
+            public static void Postfix()
             {
                 if (!modEnabled.Value)
                     return;
@@ -68,9 +68,9 @@ namespace CustomWeaponStats
 
         [HarmonyPatch(typeof(InventoryGui), "Show")]
         [HarmonyPriority(Priority.Last)]
-        static class InventoryGui_Show_Patch
+        public static class InventoryGui_Show_Patch
         {
-            static void Postfix()
+            public static void Postfix()
             {
                 if (!modEnabled.Value)
                     return;
@@ -79,9 +79,9 @@ namespace CustomWeaponStats
         }
 
         [HarmonyPatch(typeof(ItemDrop), "Awake")]
-        static class ItemDrop_Awake_Patch
+        public static class ItemDrop_Awake_Patch
         {
-            static void Postfix(ItemDrop __instance)
+            public static void Postfix(ItemDrop __instance)
             {
                 if (!modEnabled.Value)
                     return;
@@ -90,9 +90,9 @@ namespace CustomWeaponStats
         }
 
         [HarmonyPatch(typeof(ItemDrop), "SlowUpdate")]
-        static class ItemDrop_SlowUpdate_Patch
+        public static class ItemDrop_SlowUpdate_Patch
         {
-            static void Postfix(ref ItemDrop __instance)
+            public static void Postfix(ref ItemDrop __instance)
             {
                 if (!modEnabled.Value)
                     return;
@@ -101,9 +101,9 @@ namespace CustomWeaponStats
         }
 
         [HarmonyPatch(typeof(Attack), "GetAttackStamina")]
-        static class GetAttackStamina_Patch
+        public static class GetAttackStamina_Patch
         {
-            static void Postfix(ref float __result)
+            public static void Postfix(ref float __result)
             {
                 if (!modEnabled.Value)
                     return;
@@ -113,9 +113,9 @@ namespace CustomWeaponStats
         }
  
         [HarmonyPatch(typeof(Attack), "Start")]
-        static class Attack_Start_Patch
+        public static class Attack_Start_Patch
         {
-            static void Prefix(ref ItemDrop.ItemData weapon, ref WeaponState __state)
+            public static void Prefix(ref ItemDrop.ItemData weapon, ref WeaponState __state)
             {
                 if (!modEnabled.Value)
                     return;
@@ -127,8 +127,6 @@ namespace CustomWeaponStats
                 __state = new WeaponState(weapon);
 
                 weapon.m_shared.m_useDurabilityDrain *= globalUseDurabilityMultiplier.Value;
-                weapon.m_shared.m_holdDurationMin *= globalHoldDurationMinMultiplier.Value;
-                weapon.m_shared.m_holdStaminaDrain *= globalHoldStaminaDrainMultiplier.Value;
                 weapon.m_shared.m_attackForce *= globalAttackForceMultiplier.Value;
                 weapon.m_shared.m_backstabBonus *= globalBackstabBonusMultiplier.Value;
                 weapon.m_shared.m_damages.m_damage *= globalDamageMultiplier.Value;
@@ -145,14 +143,12 @@ namespace CustomWeaponStats
 
                 Dbgl($"post damage {weapon.m_shared.m_damages.m_slash}");
             }
-            static void Postfix(ref ItemDrop.ItemData weapon, WeaponState __state)
+            public static void Postfix(ref ItemDrop.ItemData weapon, WeaponState __state)
             {
                 if (!modEnabled.Value)
                     return;
 
                 weapon.m_shared.m_useDurabilityDrain = __state.useDurabilityDrain;
-                weapon.m_shared.m_holdDurationMin = __state.holdDurationMin;
-                weapon.m_shared.m_holdStaminaDrain = __state.holdStaminaDrain;
                 weapon.m_shared.m_attackForce = __state.attackForce;
                 weapon.m_shared.m_backstabBonus = __state.backstabBonus;
                 weapon.m_shared.m_damages.m_damage = __state.damage;
@@ -169,7 +165,7 @@ namespace CustomWeaponStats
             }
         }
 
-        private static void LoadAllWeaponData(bool reload)
+        public static void LoadAllWeaponData(bool reload)
         {
             if(reload)
                 weaponDatas = GetWeaponDataFromFiles();
@@ -210,7 +206,7 @@ namespace CustomWeaponStats
             }
         }
 
-        private static void CheckWeaponData(ref ItemDrop.ItemData instance)
+        public static void CheckWeaponData(ref ItemDrop.ItemData instance)
         {
             try
             {
@@ -226,7 +222,7 @@ namespace CustomWeaponStats
         }
 
 
-        private static List<WeaponData> GetWeaponDataFromFiles()
+        public static List<WeaponData> GetWeaponDataFromFiles()
         {
 
             CheckModFolder();
@@ -240,15 +236,13 @@ namespace CustomWeaponStats
             }
             return weaponDatas;
         }
-        private static void SetWeaponData(ref ItemDrop.ItemData item, WeaponData weapon)
+        public static void SetWeaponData(ref ItemDrop.ItemData item, WeaponData weapon)
         {
             item.m_shared.m_ammoType = weapon.ammoType;
             item.m_shared.m_useDurability = weapon.useDurability;
             item.m_shared.m_useDurabilityDrain = weapon.useDurabilityDrain;
             item.m_shared.m_durabilityPerLevel = weapon.durabilityPerLevel;
             item.m_shared.m_skillType = weapon.skillType;
-            item.m_shared.m_holdDurationMin = weapon.holdDurationMin;
-            item.m_shared.m_holdStaminaDrain = weapon.holdStaminaDrain;
             item.m_shared.m_toolTier = weapon.toolTier;
             item.m_shared.m_blockable = weapon.blockable;
             item.m_shared.m_dodgeable = weapon.dodgeable;
@@ -282,12 +276,19 @@ namespace CustomWeaponStats
             item.m_shared.m_damagesPerLevel.m_lightning = weapon.lightningPerLevel;
             item.m_shared.m_damagesPerLevel.m_poison = weapon.poisonPerLevel;
             item.m_shared.m_damagesPerLevel.m_spirit = weapon.spiritPerLevel;
+            
+            item.m_shared.m_attack.m_hitTerrain = weapon.hitTerrain;
+            if(item.m_shared.m_secondaryAttack != null)
+                item.m_shared.m_secondaryAttack.m_hitTerrain = weapon.hitTerrainSecondary;
 
-            item.m_shared.m_attackStatusEffect = ObjectDB.instance.GetStatusEffect(weapon.statusEffect);
+            item.m_shared.m_attackStatusEffect = ObjectDB.instance.GetStatusEffect((string.IsNullOrEmpty(weapon.statusEffect) ? 0 : weapon.statusEffect.GetStableHashCode()));
+
+
+
             //Dbgl($"Set weapon data for {weapon.name}");
         }
 
-        private static WeaponData GetWeaponDataByName(string weapon)
+        public static WeaponData GetWeaponDataByName(string weapon)
         {
             GameObject go = ObjectDB.instance.GetItemPrefab(weapon);
             if (!go)
@@ -302,7 +303,7 @@ namespace CustomWeaponStats
 
         }
 
-        private static WeaponData GetWeaponDataFromItem(ItemDrop.ItemData item, string itemName)
+        public static WeaponData GetWeaponDataFromItem(ItemDrop.ItemData item, string itemName)
         {
             return new WeaponData()
             {
@@ -312,8 +313,6 @@ namespace CustomWeaponStats
                 durabilityPerLevel = item.m_shared.m_durabilityPerLevel,
                 useDurabilityDrain = item.m_shared.m_useDurabilityDrain,
                 skillType = item.m_shared.m_skillType,
-                holdDurationMin = item.m_shared.m_holdDurationMin,
-                holdStaminaDrain = item.m_shared.m_holdStaminaDrain,
                 toolTier = item.m_shared.m_toolTier,
                 blockable = item.m_shared.m_blockable,
                 dodgeable = item.m_shared.m_dodgeable,
@@ -348,10 +347,13 @@ namespace CustomWeaponStats
                 poisonPerLevel = item.m_shared.m_damagesPerLevel.m_poison,
                 spiritPerLevel = item.m_shared.m_damagesPerLevel.m_spirit,
 
-                statusEffect = item.m_shared.m_attackStatusEffect?.name
+                statusEffect = item.m_shared.m_attackStatusEffect?.name,
+
+                hitTerrain = item.m_shared.m_attack?.m_hitTerrain == true,
+                hitTerrainSecondary = item.m_shared.m_secondaryAttack?.m_hitTerrain == true
             };
         }
-        private static void CheckModFolder()
+        public static void CheckModFolder()
         {
             if (!Directory.Exists(assetPath))
             {
@@ -361,9 +363,9 @@ namespace CustomWeaponStats
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

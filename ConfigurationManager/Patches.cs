@@ -9,10 +9,10 @@ using UnityEngine.UI;
 
 namespace ConfigurationManager
 {
-    static class Patches
+    public static class Patches
     {
         const string OpenLogString = "Show Player.log";
-        private static GameObject OpenMenuButton { get; set; }
+        public static GameObject OpenMenuButton { get; set; }
 
         internal static void ApplyPatches()
         {
@@ -34,22 +34,22 @@ namespace ConfigurationManager
 
         internal static void SetupMenuButton()
         {
-            if (OpenMenuButton == null && FejdStartup.instance?.m_mainMenu.GetComponentsInChildren<Text>().FirstOrDefault(t => t.text == OpenLogString || t.text == Localization.instance.Localize(OpenLogString)) is Text openLogButton)
+            if (OpenMenuButton == null && FejdStartup.instance?.m_mainMenu.GetComponentsInChildren<TMP_Text>().FirstOrDefault(t => t.text == OpenLogString || t.text == Localization.instance.Localize(OpenLogString)) is Text openLogButton)
             {
                 OpenMenuButton = Object.Instantiate(openLogButton.transform.parent.gameObject, openLogButton.transform.parent.parent);
                 OpenMenuButton.name = "OpenConfigMenu";
                 OpenMenuButton.transform.localPosition += new Vector3(0, 25, 0);
-                OpenMenuButton.GetComponentInChildren<Text>().text = BepInExPlugin._openMenuText.Value;
+                OpenMenuButton.GetComponentInChildren<TMP_Text>().text = BepInExPlugin._openMenuText.Value;
                 var button = OpenMenuButton.GetComponent<Button>();
                 button.onClick = new Button.ButtonClickedEvent();
                 button.onClick.AddListener(() => BepInExPlugin.context.DisplayingWindow = true);
             }
 
-            OpenMenuButton.GetComponentInChildren<Text>().text = BepInExPlugin._openMenuText.Value;
+            OpenMenuButton.GetComponentInChildren<TMP_Text>().text = BepInExPlugin._openMenuText.Value;
             OpenMenuButton.SetActive(BepInExPlugin._showMenuButton.Value);
         }
 
-        private static bool InputText(Console __instance)
+        public static bool InputText(Console __instance)
         {
             string text = __instance.m_input.text;
             if (text.ToLower().Equals($"{typeof(BepInExPlugin).Namespace.ToLower()} reset"))
@@ -63,7 +63,7 @@ namespace ConfigurationManager
             return true;
         }
 
-        private static void Start()
+        public static void Start()
         {
             SetupMenuButton();
         }

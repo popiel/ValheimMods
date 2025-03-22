@@ -2,15 +2,17 @@
 using BepInEx.Configuration;
 using HarmonyLib;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
+using static FejdStartup;
 
 namespace QuickLoad
 {
-    [BepInPlugin("aedenthorn.QuickLoad", "Quick Load", "0.4.0")]
+    [BepInPlugin("aedenthorn.QuickLoad", "Quick Load", "0.7.0")]
     public class QuickLoad: BaseUnityPlugin
     {
-        private static readonly bool isDebug = true;
+        public static readonly bool isDebug = true;
 
         public static void Dbgl(string str = "", bool pref = true)
         {
@@ -24,7 +26,7 @@ namespace QuickLoad
         public static ConfigEntry<int> nexusID;
 
 
-        private void Awake()
+        public void Awake()
         {
             hotKey = Config.Bind<string>("General", "HotKey", "f7", "Hot key code to perform quick load.");
             modEnabled = Config.Bind<bool>("General", "Enabled", true, "Enable this mod");
@@ -36,7 +38,7 @@ namespace QuickLoad
 
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), null);
         }
-        private static bool CheckKeyDown(string value)
+        public static bool CheckKeyDown(string value)
         {
             try
             {
@@ -49,36 +51,37 @@ namespace QuickLoad
         }
 
         [HarmonyPatch(typeof(FejdStartup), "Start")]
-        static class Start_Patch
+        public static class Start_Patch
         {
-            static void Postfix(FejdStartup __instance)
+            public static void Postfix(List<PlayerProfile> ___m_profiles, int ___m_profileIndex)
             {
                 if (autoLoad.Value)
                 {
                     Dbgl("performing auto load");
-                    DoQuickLoad();
+                    PlayerProfile playerProfile = ___m_profiles[___m_profileIndex];
+                    DoQuickLoad(playerProfile.GetFilename(), playerProfile.m_fileSource);
                 }
             }
         }
 
         [HarmonyPatch(typeof(FejdStartup), "Update")]
-        static class Update_Patch
+        public static class Update_Patch
         {
-            static void Postfix(FejdStartup __instance)
+            public static void Postfix(List<PlayerProfile> ___m_profiles, int ___m_profileIndex)
             {
                 if (CheckKeyDown(hotKey.Value))
                 {
                     Dbgl("pressed hot key");
-
-                    DoQuickLoad();
+                    PlayerProfile playerProfile = ___m_profiles[___m_profileIndex];
+                    DoQuickLoad(playerProfile.GetFilename(), playerProfile.m_fileSource);
                 }
             }
         }
-        private static void DoQuickLoad()
+        public static void DoQuickLoad(string fileName, FileHelpers.FileSource fileSource)
         {
 
             string worldName = PlayerPrefs.GetString("world");
-            Game.SetProfile(PlayerPrefs.GetString("profile"));
+            Game.SetProfile(fileName, fileSource);
 
             if (worldName == null || worldName.Length == 0)
                 return;
@@ -90,6 +93,7 @@ namespace QuickLoad
 
             bool isOn = FejdStartup.instance.m_publicServerToggle.isOn;
             bool isOn2 = FejdStartup.instance.m_openServerToggle.isOn;
+            bool isOn3 = FejdStartup.instance.m_crossplayServerToggle.isOn;
             string text = FejdStartup.instance.m_serverPassword.text;
             World world = (World)typeof(FejdStartup).GetMethod("FindWorld", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(FejdStartup.instance, new object[] { worldName });
 
@@ -98,19 +102,28 @@ namespace QuickLoad
 
             Dbgl($"got world");
 
+            PlayerPrefs.SetString("world", world.m_name);
 
-            ZNet.SetServer(true, isOn2, isOn, worldName, text, world);
-            ZNet.ResetServerHost();
-
-            Dbgl($"Set server");
-            try
+            if (FejdStartup.instance.m_crossplayServerToggle.IsInteractable())
             {
-                string eventLabel = "open:" + isOn2.ToString() + ",public:" + isOn.ToString();
-                Gogan.LogEvent("Menu", "WorldStart", eventLabel, 0L);
+                PlayerPrefs.SetInt("crossplay", FejdStartup.instance.m_crossplayServerToggle.isOn ? 1 : 0);
             }
-            catch
+            OnlineBackendType onlineBackend = (OnlineBackendType)typeof(FejdStartup).GetMethod("GetOnlineBackend", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(FejdStartup.instance, new object[] { isOn3 });
+            if (isOn2 && onlineBackend == OnlineBackendType.PlayFab && !PlayFabManager.IsLoggedIn)
             {
-                Dbgl($"Error calling Gogan... oh well");
+                return;
+            }
+            ZNet.m_onlineBackend = onlineBackend;
+            ZSteamMatchmaking.instance.StopServerListing();
+            AccessTools.FieldRefAccess<FejdStartup, bool>(FejdStartup.instance, "m_startingWorld") = true;
+            ZNet.SetServer(true, isOn2, isOn, world.m_name, text, world);
+            ZNet.ResetServerHost();
+            string eventLabel = "open:" + isOn2.ToString() + ",public:" + isOn.ToString();
+            Gogan.LogEvent("Menu", "WorldStart", eventLabel, 0L);
+            FejdStartup.StartGameEventHandler startGameEventHandler = (StartGameEventHandler)AccessTools.Field(typeof(FejdStartup), "startGameEvent").GetValue(null);
+            if (startGameEventHandler != null)
+            {
+                startGameEventHandler(FejdStartup.instance, new FejdStartup.StartGameEventArgs(true));
             }
 
             Dbgl($"transitioning...");

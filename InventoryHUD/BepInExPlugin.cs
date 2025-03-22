@@ -1,19 +1,21 @@
 ﻿using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
+using System;
 using System.IO;
 using System.Reflection;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace InventoryHUD
 {
-    [BepInPlugin("aedenthorn.InventoryHUD", "InventoryHUD", "0.3.0")]
+    [BepInPlugin("aedenthorn.InventoryHUD", "InventoryHUD", "0.4.1")]
     public class BepInExPlugin : BaseUnityPlugin
     {
-        private static readonly bool isDebug = true;
-        private static BepInExPlugin context;
-        private Harmony harmony;
+        public static readonly bool isDebug = true;
+        public static BepInExPlugin context;
+        public Harmony harmony;
 
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<int> nexusID;
@@ -27,7 +29,7 @@ namespace InventoryHUD
         public static ConfigEntry<string> infoString;
         public static ConfigEntry<int> infoStringSize;
         public static ConfigEntry<string> infoStringFont;
-        public static ConfigEntry<TextAnchor> infoStringAlignment;
+        public static ConfigEntry<TextAlignmentOptions> infoStringAlignment;
         public static ConfigEntry<Color> infoStringColor;
 
         public static ConfigEntry<string> weightFile;
@@ -48,7 +50,7 @@ namespace InventoryHUD
             if (isDebug)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
             modEnabled = Config.Bind<bool>("General", "Enabled", true, "Enable this mod");
@@ -64,7 +66,7 @@ namespace InventoryHUD
             infoString = Config.Bind<string>("Info", "InfoString", "{0}/{1}\r\n{2}/{3}", "Inventory info string to show. {0} is replaced by current number of items. {1} is replaced by number of slots total. {2} is replaced by current weight. {3} is replaced by total weight. See string.Format API for advanced usage.");
             infoStringSize = Config.Bind<int>("Info", "InfoStringSize", 12, "Inventory info string size.");
             infoStringFont = Config.Bind<string>("Info", "InfoStringFont", "AveriaSerifLibre-Bold", "Inventory info string font.");
-            infoStringAlignment = Config.Bind<TextAnchor>("Info", "InfoStringAlignment", TextAnchor.MiddleCenter, "Info string alignment");
+            infoStringAlignment = Config.Bind<TextAlignmentOptions>("Info", "InfoStringAlignment", TextAlignmentOptions.Center, "Info string alignment");
             infoStringColor = Config.Bind<Color>("Info", "InfoStringColor", new Color(1, 1, 1, 0.5f), "Info string color");
 
             weightOffset = Config.Bind<Vector2>("Weight", "WeightOffset", new Vector2(0,0), "Weight icon offset");
@@ -73,35 +75,34 @@ namespace InventoryHUD
             weightColor = Config.Bind<Color>("Weight", "WeightColor", new Color(1,1,1,0.5f), "Weight icon color");
             fillColor = Config.Bind<Color>("Weight", "WeightFillColor", new Color(1, 1, 0.5f, 1f), "Weight icon fill color");
 
-
-
-            if (!modEnabled.Value)
-                return;
-
             harmony = new Harmony(Info.Metadata.GUID);
             harmony.PatchAll();
         }
 
-        private void OnDestroy()
+        public void OnDestroy()
         {
             Dbgl("Destroying plugin");
             harmony?.UnpatchAll();
         }
-        private static Font GetFont(string fontName, int fontSize)
+        public static TMP_FontAsset GetFont(string fontName, int fontSize)
         {
-            Font[] fonts = Resources.FindObjectsOfTypeAll<Font>();
-            foreach (Font font in fonts)
+            TMP_FontAsset[] fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
+            foreach (TMP_FontAsset font in fonts)
             {
                 if (font.name == fontName)
                 {
                     return font;
                 }
             }
-            return Font.CreateDynamicFontFromOSFont(fontName, fontSize);
+            return null;
         }
 
-        private static void AddWeightObject(Hud hud)
+        public static void AddWeightObject(Hud hud)
         {
+
+            if (!modEnabled.Value)
+                return;
+
             string path = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "InventoryHUD");
 
             weightTexture = new Texture2D(2, 2, TextureFormat.RGBA32, false, true);
@@ -182,7 +183,7 @@ namespace InventoryHUD
             Dbgl("Added weight object to hud");
         }
 
-        private static void AddInfoString(Hud hud)
+        public static void AddInfoString(Hud hud)
         {
             infoObject = new GameObject
             {
@@ -194,15 +195,19 @@ namespace InventoryHUD
             rt.localScale = Vector3.one;
             rt.anchoredPosition = Vector2.zero;
 
-            Text text = infoObject.AddComponent<Text>();
-            text.font = GetFont(infoStringFont.Value, infoStringSize.Value);
+            TextMeshProUGUI text = infoObject.AddComponent<TextMeshProUGUI>();
+            Dbgl($"text: {text?.GetType()}");
+            Dbgl($"{text.text}");
+            var font = GetFont(infoStringFont.Value, infoStringSize.Value);
+            if (font != null)
+                text.font = font;
         }
 
 
         [HarmonyPatch(typeof(Hud), "Awake")]
-        static class Hud_Awake_Patch
+        public static class Hud_Awake_Patch
         {
-            static void Postfix(Hud __instance)
+            public static void Postfix(Hud __instance)
             {
                 if (!modEnabled.Value)
                     return;
@@ -217,28 +222,27 @@ namespace InventoryHUD
 
 
         [HarmonyPatch(typeof(Hud), "Update")]
-        static class Hud_Update_Patch
+        public static class Hud_Update_Patch
         {
             public static Vector3 lastPosition = Vector3.zero;
-            static void Prefix(Hud __instance)
+            public static void Prefix(Hud __instance)
             {
-                if (!modEnabled.Value || !Player.m_localPlayer)
+                if (!modEnabled.Value || Player.m_localPlayer is null)
                     return;
 
                 Vector3 hudPos = new Vector3(hudPosition.Value.x, hudPosition.Value.y, 0);
-
-                if (__instance.m_rootObject.transform.localPosition.x > 1000f)
+                if (__instance.m_rootObject?.transform.localPosition.x > 1000f)
                 {
-                    maskObject.SetActive(false);
-                    partialObject.SetActive(false);
-                    fullObject.SetActive(false);
-                    infoObject.SetActive(false);
+                    maskObject?.SetActive(false);
+                    partialObject?.SetActive(false);
+                    fullObject?.SetActive(false);
+                    infoObject?.SetActive(false);
                     return;
                 }
-                maskObject.SetActive(true);
-                partialObject.SetActive(true);
-                fullObject.SetActive(true);
-                infoObject.SetActive(true);
+                maskObject?.SetActive(true);
+                partialObject?.SetActive(true);
+                fullObject?.SetActive(true);
+                infoObject?.SetActive(true);
 
                 Inventory inv = Player.m_localPlayer.GetInventory();
                 Vector3 weightPos = hudPos + new Vector3(weightOffset.Value.x, weightOffset.Value.y, 0);
@@ -247,7 +251,7 @@ namespace InventoryHUD
                 float totalWeight = Player.m_localPlayer.GetMaxCarryWeight();
                 if (fullObject != null)
                 {
-                    float hudScale = GameObject.Find("GUI").GetComponent<CanvasScaler>().scaleFactor;
+                    float hudScale = GameObject.Find("LoadingGUI").GetComponent<CanvasScaler>().scaleFactor;
 
                     float maskOffset = (1 - weight / totalWeight ) * weightTexture.height * weightScale.Value * hudScale;
 
@@ -281,15 +285,14 @@ namespace InventoryHUD
 
                     int items = inv.GetAllItems().Count;
                     int slots = inv.GetWidth() * inv.GetHeight() + extraSlots.Value;
-                    Text text = infoObject.GetComponent<Text>();
-                    text.text = string.Format(infoString.Value, items, slots, weight, totalWeight);
+                    TextMeshProUGUI text = infoObject.GetComponent<TextMeshProUGUI>();
+                    text.text = string.Format(infoString.Value, new object[] { items, slots, Math.Round(weight), Math.Round(totalWeight) });
                     text.color = infoStringColor.Value;
                     text.alignment = infoStringAlignment.Value;
                     text.fontSize = infoStringSize.Value;
                 }
 
                 /*
-
                 Rect rect = parentObject.GetComponent<Image>().sprite.rect;
                 partialObject.transform.parent.GetComponent<RectTransform>().localScale = Vector3.one * weightScale.Value;
                 */
@@ -298,9 +301,9 @@ namespace InventoryHUD
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

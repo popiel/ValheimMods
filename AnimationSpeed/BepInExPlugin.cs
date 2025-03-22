@@ -10,12 +10,12 @@ using UnityEngine.UI;
 
 namespace AnimationSpeed
 {
-    [BepInPlugin("aedenthorn.AnimationSpeed", "Animation Speed", "0.8.0")]
+    [BepInPlugin("aedenthorn.AnimationSpeed", "Animation Speed", "1.0.0")]
     public class BepInExPlugin: BaseUnityPlugin
     {
         public static Dictionary<long, string> lastAnims = new Dictionary<long, string>();
 
-        private static readonly bool isDebug = false;
+        public static readonly bool isDebug = false;
 
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<int> nexusID;
@@ -48,14 +48,14 @@ namespace AnimationSpeed
         public static ConfigEntry<float> unarmedEnemySpeedMult;
         public static ConfigEntry<float> basicEnemyAttackSpeedMult;
 
-        private static BepInExPlugin context;
+        public static BepInExPlugin context;
         
         public static void Dbgl(string str = "", bool pref = true)
         {
             if (isDebug)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
             
@@ -94,7 +94,7 @@ namespace AnimationSpeed
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), null);
         }
 
-        private static bool CheckKeyDown(string value)
+        public static bool CheckKeyDown(string value)
         {
             try
             {
@@ -106,19 +106,19 @@ namespace AnimationSpeed
             }
         }
         [HarmonyPatch(typeof(CharacterAnimEvent), "Speed")]
-        static class CharacterAnimEvent_Speed_Patch
+        public static class CharacterAnimEvent_Speed_Patch
         {
-            static void Postfix(ref Animator ___m_animator, Character ___m_character, float speedScale)
+            public static void Postfix(Character ___m_character)
             {
                 if (___m_character is Player)
                     lastAnims.Remove((___m_character as Player).GetPlayerID());
             }
         }
 
-        [HarmonyPatch(typeof(CharacterAnimEvent), "FixedUpdate")]
-        static class CharacterAnimEvent_Awake_Patch
+        [HarmonyPatch(typeof(CharacterAnimEvent), nameof(CharacterAnimEvent.CustomFixedUpdate))]
+        public static class CharacterAnimEvent_CustomFixedUpdate_Patch
         {
-            static void Prefix(ref Animator ___m_animator, Character ___m_character)
+            public static void Prefix(ref Animator ___m_animator, Character ___m_character)
             {
                 if (!modEnabled.Value || !(___m_character is Humanoid) || Player.m_localPlayer == null || (___m_character is Player && (___m_character as Player).GetPlayerID() != Player.m_localPlayer.GetPlayerID()))
                     return;
@@ -215,9 +215,9 @@ namespace AnimationSpeed
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

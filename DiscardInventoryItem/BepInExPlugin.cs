@@ -10,10 +10,10 @@ using UnityEngine;
 
 namespace DiscardInventoryItem
 {
-    [BepInPlugin("aedenthorn.DiscardInventoryItem", "Discard or Recycle Inventory Items", "0.7.0")]
+    [BepInPlugin("aedenthorn.DiscardInventoryItem", "Discard or Recycle Inventory Items", "1.0.0")]
     public class BepInExPlugin: BaseUnityPlugin
     {
-        private static readonly bool isDebug = true;
+        public static readonly bool isDebug = true;
 
         public static ConfigEntry<string> hotKey;
         public static ConfigEntry<bool> modEnabled;
@@ -22,15 +22,15 @@ namespace DiscardInventoryItem
         public static ConfigEntry<float> returnResources;
         public static ConfigEntry<int> nexusID;
 
-        private static BepInExPlugin context;
-        private static Assembly epicLootAssembly;
+        public static BepInExPlugin context;
+        public static Assembly epicLootAssembly;
 
         public static void Dbgl(string str = "", bool pref = true)
         {
             if (isDebug)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
 
@@ -46,7 +46,7 @@ namespace DiscardInventoryItem
 
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), null);
         }
-        private void Start()
+        public void Start()
         {
             if (Chainloader.PluginInfos.ContainsKey("randyknapp.mods.epicloot"))
                 epicLootAssembly = Chainloader.PluginInfos["randyknapp.mods.epicloot"].Instance.GetType().Assembly;
@@ -54,9 +54,9 @@ namespace DiscardInventoryItem
         }
 
         [HarmonyPatch(typeof(InventoryGui), "UpdateItemDrag")]
-        static class UpdateItemDrag_Patch
+        public static class UpdateItemDrag_Patch
         {
-            static void Postfix(InventoryGui __instance, ItemDrop.ItemData ___m_dragItem, Inventory ___m_dragInventory, int ___m_dragAmount, ref GameObject ___m_dragGo)
+            public static void Postfix(InventoryGui __instance, ItemDrop.ItemData ___m_dragItem, Inventory ___m_dragInventory, int ___m_dragAmount, ref GameObject ___m_dragGo)
             {
                 if (!modEnabled.Value || !Input.GetKeyDown(hotKey.Value) || ___m_dragItem == null || !___m_dragInventory.ContainsItem(___m_dragItem))
                     return;
@@ -83,7 +83,7 @@ namespace DiscardInventoryItem
                         if (isMagic)
                         {
                             int rarity = (int)epicLootAssembly.GetType("EpicLoot.ItemDataExtensions").GetMethod("GetRarity", BindingFlags.Public | BindingFlags.Static).Invoke(null, new[] { ___m_dragItem });
-                            List<KeyValuePair<ItemDrop, int>> magicReqs = (List<KeyValuePair<ItemDrop, int>>)epicLootAssembly.GetType("EpicLoot.Crafting.EnchantTabController").GetMethod("GetEnchantCosts", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { ___m_dragItem, rarity });
+                            List<KeyValuePair<ItemDrop, int>> magicReqs = (List<KeyValuePair<ItemDrop, int>>)epicLootAssembly.GetType("EpicLoot.Crafting.EnchantHelper").GetMethod("GetEnchantCosts", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { ___m_dragItem, rarity });
                             foreach (var kvp in magicReqs)
                             {
                                 if (!returnUnknownResources.Value && ((ObjectDB.instance.GetRecipe(kvp.Key.m_itemData) && !Player.m_localPlayer.IsRecipeKnown(kvp.Key.m_itemData.m_shared.m_name)) || !Traverse.Create(Player.m_localPlayer).Field("m_knownMaterial").GetValue<HashSet<string>>().Contains(kvp.Key.m_itemData.m_shared.m_name)))
@@ -135,7 +135,7 @@ namespace DiscardInventoryItem
 
                 if (___m_dragAmount == ___m_dragItem.m_stack)
                 {
-                    Player.m_localPlayer.RemoveFromEquipQueue(___m_dragItem);
+                    Player.m_localPlayer.RemoveEquipAction(___m_dragItem);
                     Player.m_localPlayer.UnequipItem(___m_dragItem, false);
                     ___m_dragInventory.RemoveItem(___m_dragItem);
                 }
@@ -148,9 +148,9 @@ namespace DiscardInventoryItem
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

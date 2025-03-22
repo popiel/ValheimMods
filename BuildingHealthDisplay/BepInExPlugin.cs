@@ -3,17 +3,18 @@ using BepInEx.Configuration;
 using HarmonyLib;
 using System.Collections.Generic;
 using System.IO;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
 namespace BuildingHealthDisplay
 {
-    [BepInPlugin("aedenthorn.BuildingHealthDisplay", "Building Health Display", "0.4.0")]
+    [BepInPlugin("aedenthorn.BuildingHealthDisplay", "Building Health Display", "0.6.0")]
     public class BepInExPlugin : BaseUnityPlugin
     {
-        private static readonly bool isDebug = true;
-        private static BepInExPlugin context;
-        private Harmony harmony;
+        public static readonly bool isDebug = true;
+        public static BepInExPlugin context;
+        public Harmony harmony;
 
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<int> nexusID;
@@ -49,7 +50,7 @@ namespace BuildingHealthDisplay
             if (isDebug)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
             modEnabled = Config.Bind<bool>("General", "Enabled", true, "Enable this mod");
@@ -80,16 +81,16 @@ namespace BuildingHealthDisplay
             harmony.PatchAll();
         }
 
-        private void OnDestroy()
+        public void OnDestroy()
         {
             Dbgl("Destroying plugin");
             harmony?.UnpatchAll();
         }
 
         [HarmonyPatch(typeof(Hud), "UpdateCrosshair")]
-        static class UpdateCrosshair_Patch
+        public static class UpdateCrosshair_Patch
         {
-            static void Postfix(Hud __instance, Player player)
+            public static void Postfix(Hud __instance, Player player)
             {
                 if (!modEnabled.Value)
                     return;
@@ -122,9 +123,9 @@ namespace BuildingHealthDisplay
                             }
                             t.name = "_HealthText";
 
-                            t.GetComponent<Text>().text = string.Format(healthText.Value, Mathf.RoundToInt(znv.GetZDO().GetFloat("health", wnt.m_health)), Mathf.RoundToInt(wnt.m_health), Mathf.RoundToInt(healthPercent*100));
-                            t.GetComponent<Text>().fontSize = healthTextSize.Value;
-                            t.GetComponent<Text>().resizeTextMaxSize = t.GetComponent<Text>().text.Length;
+                            t.GetComponent<TMP_Text>().text = string.Format(healthText.Value, Mathf.RoundToInt(znv.GetZDO().GetFloat("health", wnt.m_health)), Mathf.RoundToInt(wnt.m_health), Mathf.RoundToInt(healthPercent*100));
+                            t.GetComponent<TMP_Text>().fontSize = healthTextSize.Value;
+                            t.GetComponent<TMP_Text>().maxVisibleCharacters = t.GetComponent<TMP_Text>().text.Length;
                             t.GetComponent<RectTransform>().anchoredPosition = new Vector2(healthTextPosition.Value.y, healthTextPosition.Value.x);
                         }
                         float support = Traverse.Create(wnt).Method("GetSupport").GetValue<float>();
@@ -139,9 +140,9 @@ namespace BuildingHealthDisplay
                             }
                             t.name = "_IntegrityText";
 
-                            t.GetComponent<Text>().text = string.Format(integrityText.Value, Mathf.RoundToInt(support), Mathf.RoundToInt(maxSupport), Mathf.RoundToInt(support/maxSupport*100));
-                            t.GetComponent<Text>().fontSize = integrityTextSize.Value;
-                            t.GetComponent<Text>().resizeTextMaxSize = t.GetComponent<Text>().text.Length;
+                            t.GetComponent<TMP_Text>().text = string.Format(integrityText.Value, Mathf.RoundToInt(support), Mathf.RoundToInt(maxSupport), Mathf.RoundToInt(support/maxSupport*100));
+                            t.GetComponent<TMP_Text>().fontSize = integrityTextSize.Value;
+                            t.GetComponent<TMP_Text>().maxVisibleCharacters = t.GetComponent<TMP_Text>().text.Length;
                             t.GetComponent<RectTransform>().anchoredPosition = new Vector2(integrityTextPosition.Value.y, integrityTextPosition.Value.x);
                         }
                     }
@@ -150,9 +151,9 @@ namespace BuildingHealthDisplay
         }
         
         [HarmonyPatch(typeof(WearNTear), "Highlight")]
-        static class WearNTear_Highlight_Patch
+        public static class WearNTear_Highlight_Patch
         {
-            static void Postfix(WearNTear __instance)
+            public static void Postfix(WearNTear __instance)
             {
                 if (!modEnabled.Value || !customIntegrityColors.Value)
                     return;
@@ -179,9 +180,9 @@ namespace BuildingHealthDisplay
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

@@ -1,6 +1,7 @@
 ﻿using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -9,10 +10,10 @@ using UnityEngine;
 
 namespace AutoFuel
 {
-    [BepInPlugin("aedenthorn.AutoFuel", "Auto Fuel", "0.9.3")]
+    [BepInPlugin("aedenthorn.AutoFuel", "Auto Fuel", "1.3.1")]
     public class BepInExPlugin: BaseUnityPlugin
     {
-        private static readonly bool isDebug = false;
+        public static readonly bool isDebug = false;
 
         public static ConfigEntry<float> dropRange;
         public static ConfigEntry<float> containerRange;
@@ -34,17 +35,17 @@ namespace AutoFuel
         public static ConfigEntry<bool> distributedFilling;
         public static ConfigEntry<int> nexusID;
 
-        private static BepInExPlugin context;
+        public static BepInExPlugin context;
 
-        private static float lastFuel;
-        private static int fuelCount;
+        public static float lastFuel;
+        public static int fuelCount;
 
         public static void Dbgl(string str = "", bool pref = true)
         {
             if (isDebug)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
             dropRange = Config.Bind<float>("General", "DropRange", 5f, "The maximum range to pull dropped fuel");
@@ -72,7 +73,7 @@ namespace AutoFuel
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), null);
         }
 
-        private void Update()
+        public void Update()
         {
             if (AedenthornUtils.CheckKeyDown(toggleKey.Value) && !AedenthornUtils.IgnoreKeyPresses(true))
             {
@@ -82,7 +83,7 @@ namespace AutoFuel
             }
 
         }
-        private static string GetPrefabName(string name)
+        public static string GetPrefabName(string name)
         {
             char[] anyOf = new char[]{'(',' '};
             int num = name.IndexOfAny(anyOf);
@@ -101,10 +102,10 @@ namespace AutoFuel
 
                 foreach (Collider collider in Physics.OverlapSphere(center, Mathf.Max(range, 0), LayerMask.GetMask(new string[] { "piece" })))
                 {
-                    Container container = collider.transform.parent?.parent?.gameObject?.GetComponent<Container>();
-                    if (container?.GetComponent<ZNetView>()?.IsValid() != true)
+                    Container container = GetContainer(collider.transform);
+                    if (container is null || container.GetComponent<ZNetView>()?.IsValid() != true)
                         continue;
-                    if (container?.transform?.position != null && (container.name.StartsWith("piece_chest") || container.name.StartsWith("Container")) && container.GetInventory() != null)
+                    if (container.GetInventory() != null)
                     {
                         containers.Add(container);
                     }
@@ -117,11 +118,22 @@ namespace AutoFuel
             }
         }
 
+        public static Container GetContainer(Transform transform)
+        {
+            while(transform != null)
+            {
+                Container c = transform.GetComponent<Container>();
+                if (c != null)
+                    return c;
+                transform = transform.parent;
+            }
+            return null;
+        }
 
         [HarmonyPatch(typeof(Fireplace), "UpdateFireplace")]
-        static class Fireplace_UpdateFireplace_Patch
+        public static class Fireplace_UpdateFireplace_Patch
         {
-            static void Postfix(Fireplace __instance, ZNetView ___m_nview)
+            public static void Postfix(Fireplace __instance, ZNetView ___m_nview)
             {
                 if (!Player.m_localPlayer || !isOn.Value || !___m_nview.IsOwner() || (__instance.name.Contains("groundtorch") && !refuelStandingTorches.Value) || (__instance.name.Contains("walltorch") && !refuelWallTorches.Value) || (__instance.name.Contains("fire_pit") && !refuelFirePits.Value))
                     return;
@@ -188,7 +200,7 @@ namespace AutoFuel
                                         Destroy(item.gameObject);
                                     else
                                         ZNetScene.instance.Destroy(item.gameObject);
-                                    znview.InvokeRPC("AddFuel", new object[] { });
+                                    znview.InvokeRPC("RPC_AddFuel", new object[] { });
                                     if (distributedFilling.Value)
                                         return;
                                     break;
@@ -196,7 +208,7 @@ namespace AutoFuel
                                 }
 
                                 item.m_itemData.m_stack--;
-                                znview.InvokeRPC("AddFuel", new object[] { });
+                                znview.InvokeRPC("RPC_AddFuel", new object[] { });
                                 Traverse.Create(item).Method("Save").GetValue();
                                 if (distributedFilling.Value)
                                     return;
@@ -224,7 +236,7 @@ namespace AutoFuel
 
                                 Dbgl($"container at {c.transform.position} has {fuelItem.m_stack} {fuelItem.m_dropPrefab.name}, taking one");
 
-                                znview.InvokeRPC("AddFuel", new object[] { });
+                                znview.InvokeRPC("RPC_AddFuel", new object[] { });
 
                                 c.GetInventory().RemoveItem(fireplace.m_fuelItem.m_itemData.m_shared.m_name, 1);
                                 typeof(Container).GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(c, new object[] { });
@@ -240,9 +252,9 @@ namespace AutoFuel
         }
 
         [HarmonyPatch(typeof(Smelter), "UpdateSmelter")]
-        static class Smelter_FixedUpdate_Patch
+        public static class Smelter_FixedUpdate_Patch
         {
-            static void Postfix(Smelter __instance, ZNetView ___m_nview)
+            public static void Postfix(Smelter __instance, ZNetView ___m_nview)
             {
                 if (!Player.m_localPlayer || !isOn.Value || ___m_nview == null || !___m_nview.IsOwner())
                     return;
@@ -339,14 +351,14 @@ namespace AutoFuel
                                         Destroy(item.gameObject);
                                     else
                                         ZNetScene.instance.Destroy(item.gameObject);
-                                    ___m_nview.InvokeRPC("AddOre", new object[] { name });
+                                    ___m_nview.InvokeRPC("RPC_AddOre", new object[] { name });
                                     if (distributedFilling.Value)
                                         ored = true;
                                     break;
                                 }
 
                                 item.m_itemData.m_stack--;
-                                ___m_nview.InvokeRPC("AddOre", new object[] { name });
+                                ___m_nview.InvokeRPC("RPC_AddOre", new object[] { name });
                                 Traverse.Create(item).Method("Save").GetValue();
                                 if (distributedFilling.Value)
                                     ored = true;
@@ -376,7 +388,7 @@ namespace AutoFuel
                                     Destroy(item.gameObject);
                                 else
                                     ZNetScene.instance.Destroy(item.gameObject);
-                                ___m_nview.InvokeRPC("AddFuel", new object[] { });
+                                ___m_nview.InvokeRPC("RPC_AddFuel", new object[] { });
                                 if (distributedFilling.Value)
                                     fueled = true;
                                 break;
@@ -384,7 +396,7 @@ namespace AutoFuel
                             }
 
                             item.m_itemData.m_stack--;
-                            ___m_nview.InvokeRPC("AddFuel", new object[] { });
+                            ___m_nview.InvokeRPC("RPC_AddFuel", new object[] { });
                             Traverse.Create(item).Method("Save").GetValue();
                             if (distributedFilling.Value)
                             {
@@ -415,7 +427,7 @@ namespace AutoFuel
 
                             Dbgl($"container at {c.transform.position} has {oreItem.m_stack} {oreItem.m_dropPrefab.name}, taking one");
 
-                            ___m_nview.InvokeRPC("AddOre", new object[] { oreItem.m_dropPrefab?.name });
+                            ___m_nview.InvokeRPC("RPC_AddOre", new object[] { oreItem.m_dropPrefab?.name });
                             c.GetInventory().RemoveItem(itemConversion.m_from.m_itemData.m_shared.m_name, 1);
                             typeof(Container).GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(c, new object[] { });
                             typeof(Inventory).GetMethod("Changed", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(c.GetInventory(), new object[] { });
@@ -449,7 +461,7 @@ namespace AutoFuel
 
                         Dbgl($"container at {c.transform.position} has {fuelItem.m_stack} {fuelItem.m_dropPrefab.name}, taking one");
 
-                        ___m_nview.InvokeRPC("AddFuel", new object[] { });
+                        ___m_nview.InvokeRPC("RPC_AddFuel", new object[] { });
 
                         c.GetInventory().RemoveItem(__instance.m_fuelItem.m_itemData.m_shared.m_name, 1);
                         typeof(Container).GetMethod("Save", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(c, new object[] { });
@@ -464,9 +476,9 @@ namespace AutoFuel
             }
         }
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

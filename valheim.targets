@@ -3,10 +3,10 @@
   <PropertyGroup>
     <AssemblyName>$(ProjectName)</AssemblyName>
     <RootNamespace>$(ProjectName)</RootNamespace>
-    <TargetFramework>net462</TargetFramework>
+    <TargetFramework>net480</TargetFramework>
     <Platforms>AnyCPU</Platforms>
     <PlatformTarget>AnyCPU</PlatformTarget>
-    <GamePath><!-- Set GamePath manually --></GamePath>
+    <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -46,14 +46,14 @@
       </PropertyGroup>
     </When>
   </Choose>
-  
+
   <!-- Manual overrides -->
   <PropertyGroup>
     <BepInExPath>$(GamePath)\BepInEx</BepInExPath>
     <ManagedDataPath>$(GamePath)\valheim_Data\Managed</ManagedDataPath>
-    <UnityPath>$(GamePath)\unstripped_corlib</UnityPath>
+    <UnityPath>$(GamePath)\valheim_Data\Managed</UnityPath>
   </PropertyGroup>
-  
+
   <!-- Set start action -->
   <PropertyGroup Condition="'$(OS)' == 'Windows_NT'">
     <StartAction>Program</StartAction>
@@ -98,11 +98,6 @@
       <HintPath>$(ManagedDataPath)\assembly_postprocessing.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="assembly_steamworks">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>$(ManagedDataPath)\assembly_steamworks.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
     <Reference Include="assembly_sunshafts">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>$(ManagedDataPath)\assembly_sunshafts.dll</HintPath>
@@ -113,13 +108,19 @@
       <HintPath>$(ManagedDataPath)\assembly_utils.dll</HintPath>
       <Private>False</Private>
     </Reference>
-  </ItemGroup>
-
-  <!-- Add ServerSync reference -->
-  <ItemGroup Label="ServerSync">
-    <Reference Include="ServerSync">
-      <HintPath>..\..\ServerSync\bin\Debug\ServerSync.dll</HintPath>
+    <Reference Include="gui_framework">
       <SpecificVersion>False</SpecificVersion>
+      <HintPath>$(ManagedDataPath)\gui_framework.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="netstandard">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>$(ManagedDataPath)\netstandard.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SPlatform">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>$(ManagedDataPath)\SPlatform.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>
@@ -179,6 +180,11 @@
     <Reference Include="UnityEngine.ScreenCaptureModule">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>$(UnityPath)\UnityEngine.ScreenCaptureModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>$(ManagedDataPath)\Unity.TextMeshPro.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="UnityEngine.UI">

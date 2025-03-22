@@ -7,10 +7,10 @@ using UnityEngine;
 
 namespace Regeneration
 {
-    [BepInPlugin("aedenthorn.Regeneration", "Regeneration", "0.3.1")]
+    [BepInPlugin("aedenthorn.Regeneration", "Regeneration", "0.4.1")]
     public class Regeneration : BaseUnityPlugin
     {
-        private static readonly bool isDebug = true;
+        public static readonly bool isDebug = true;
 
         public static ConfigEntry<float> staminaLossMult;
         public static ConfigEntry<float> sneakStaminaLoss;
@@ -26,11 +26,11 @@ namespace Regeneration
         public static ConfigEntry<float> buildStaminaLossMult;
         public static ConfigEntry<float> hookedStaminaPerSec;
         
-        public static ConfigEntry<float> weightStaminaFactor;
         public static ConfigEntry<float> encumberedStaminaLoss;
         
         public static ConfigEntry<float> staminaRegenMult;
         public static ConfigEntry<float> staminaRegenCooldownMult;
+        public static ConfigEntry<float> eitrRegenRate;
         public static ConfigEntry<float> healthRegenMult;
         public static ConfigEntry<float> healthRegenTimeMult;
 
@@ -42,31 +42,31 @@ namespace Regeneration
             if (isDebug)
                 Debug.Log((pref ? typeof(Regeneration).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
-            staminaLossMult = Config.Bind<float>("Stamina", "StaminaLossMult", 1f, "General stamina loss multiplier (affects all stamina loss).");
+            staminaLossMult = Config.Bind<float>("Options", "StaminaLossMult", 1f, "General stamina loss multiplier (affects all stamina loss).");
 
             
-            swimStaminaLossMin = Config.Bind<float>("Stamina", "SwimStaminaLossMin", 5f, "Stamina loss for swimming at minimum swim skill.");
-            swimStaminaLossMax = Config.Bind<float>("Stamina", "SwimStaminaLossMax", 2f, "Stamina loss for swimming at maximum swim skill.");
+            swimStaminaLossMin = Config.Bind<float>("Options", "SwimStaminaLossMin", 5f, "Stamina loss for swimming at minimum swim skill.");
+            swimStaminaLossMax = Config.Bind<float>("Options", "SwimStaminaLossMax", 2f, "Stamina loss for swimming at maximum swim skill.");
 
-            dodgeStaminaLoss = Config.Bind<float>("Stamina", "DodgeStaminaLoss", 10f, "Stamina loss for dodging.");
-            jumpStaminaLoss = Config.Bind<float>("Stamina", "JumpStaminaLoss", 10f, "Stamina loss for jumping.");
-            blockStaminaLoss = Config.Bind<float>("Stamina", "BlockStaminaLoss", 25f, "Stamina loss for blocking.");
-            sneakStaminaLoss = Config.Bind<float>("Stamina", "SneakStaminaLoss", 5f, "Stamina loss for sneaking.");
-            runStaminaLoss = Config.Bind<float>("Stamina", "RunStaminaLoss", 10f, "Stamina loss for running.");
+            dodgeStaminaLoss = Config.Bind<float>("Options", "DodgeStaminaLoss", 10f, "Stamina loss for dodging.");
+            jumpStaminaLoss = Config.Bind<float>("Options", "JumpStaminaLoss", 10f, "Stamina loss for jumping.");
+            blockStaminaLoss = Config.Bind<float>("Options", "BlockStaminaLoss", 25f, "Stamina loss for blocking.");
+            sneakStaminaLoss = Config.Bind<float>("Options", "SneakStaminaLoss", 5f, "Stamina loss for sneaking.");
+            runStaminaLoss = Config.Bind<float>("Options", "RunStaminaLoss", 10f, "Stamina loss for running.");
 
-            weightStaminaFactor = Config.Bind<float>("Stamina", "WeightStaminaFactor", 0.1f, "Stamina loss weight factor.");
-            encumberedStaminaLoss = Config.Bind<float>("Stamina", "EncumberedStaminaLoss", 10f, "Stamina loss when encumbered.");
+            encumberedStaminaLoss = Config.Bind<float>("Options", "EncumberedStaminaLoss", 10f, "Stamina loss when encumbered.");
 
-            buildStaminaLossMult = Config.Bind<float>("Stamina", "BuildStaminaLossMult", 1f, "Stamina loss multiplier for building.");
-            hookedStaminaPerSec = Config.Bind<float>("Stamina", "HookedStaminaPerSec", 1f, "Stamina loss per second while reeling in a hooked fish.");
+            buildStaminaLossMult = Config.Bind<float>("Options", "BuildStaminaLossMult", 1f, "Stamina loss multiplier for building.");
+            hookedStaminaPerSec = Config.Bind<float>("Options", "HookedStaminaPerSec", 1f, "Stamina loss per second while reeling in a hooked fish.");
 
-            staminaRegenMult = Config.Bind<float>("Stamina", "StaminaRegenMult", 1f, "Stamina gain multiplier.");
-            staminaRegenCooldownMult = Config.Bind<float>("Stamina", "StaminaRegenCooldownMult", 1f, "Stamina regen cooldown time multiplier.");
+            staminaRegenMult = Config.Bind<float>("Options", "StaminaRegenMult", 1f, "Stamina gain multiplier.");
+            staminaRegenCooldownMult = Config.Bind<float>("Options", "StaminaRegenCooldownMult", 1f, "Stamina regen cooldown time multiplier.");
 
-            healthRegenMult = Config.Bind<float>("Stamina", "HealthRegenMult", 1f, "Health gain multiplier.");
-            healthRegenTimeMult = Config.Bind<float>("Stamina", "HealthRegenTimeMult", 1f, "Health gain delay multiplier.");
+            eitrRegenRate = Config.Bind<float>("Options", "EitrRegenRate", 5f, "Eitr Regen Rate.");
+            healthRegenMult = Config.Bind<float>("Options", "HealthRegenMult", 1f, "Health gain multiplier.");
+            healthRegenTimeMult = Config.Bind<float>("Options", "HealthRegenTimeMult", 1f, "Health gain delay multiplier.");
 
             modEnabled = Config.Bind<bool>("General", "Enabled", true, "Enable this mod");
             nexusID = Config.Bind<int>("General", "NexusID", 25, "Nexus mod ID for updates");
@@ -79,9 +79,9 @@ namespace Regeneration
 
 
         [HarmonyPatch(typeof(Player), "UpdateFood")]
-        static class UpdateFood_Patch
+        public static class UpdateFood_Patch
         {
-            static void Prefix(float dt, bool forceUpdate, ref float ___m_foodRegenTimer)
+            public static void Prefix(float dt, bool forceUpdate, ref float ___m_foodRegenTimer)
             {
                 if (modEnabled.Value && !forceUpdate)
                 {
@@ -91,12 +91,13 @@ namespace Regeneration
         }
 
         [HarmonyPatch(typeof(Player), "UpdateStats", new Type[] { typeof(float) })]
-        static class UpdateStats_Patch
+        public static class UpdateStats_Patch
         {
-            static void Prefix(Player __instance, ref float __state, float ___m_stamina, ref float ___m_staminaRegenTimer)
+            public static void Prefix(Player __instance, ref float __state, float ___m_stamina, ref float ___m_staminaRegenTimer, ref float ___m_eiterRegen)
             {
                 if (modEnabled.Value)
                 {
+                    ___m_eiterRegen = eitrRegenRate.Value;
                     __instance.m_dodgeStaminaUsage = dodgeStaminaLoss.Value;
                     __instance.m_jumpStaminaUsage = jumpStaminaLoss.Value;
                     __instance.m_blockStaminaDrain = blockStaminaLoss.Value;
@@ -104,7 +105,6 @@ namespace Regeneration
                     __instance.m_runStaminaDrain = runStaminaLoss.Value;
                     
                     __instance.m_encumberedStaminaDrain = encumberedStaminaLoss.Value;
-                    __instance.m_weightStaminaFactor = weightStaminaFactor.Value;
 
                     __instance.m_swimStaminaDrainMaxSkill = swimStaminaLossMax.Value;
                     __instance.m_swimStaminaDrainMaxSkill = swimStaminaLossMin.Value;
@@ -113,7 +113,7 @@ namespace Regeneration
                     __state = ___m_stamina;
                 }
             }
-            static void Postfix(Player __instance, float __state, ref float ___m_stamina)
+            public static void Postfix(Player __instance, float __state, ref float ___m_stamina)
             {
                 if (modEnabled.Value)
                 {
@@ -126,16 +126,16 @@ namespace Regeneration
         }
         
         [HarmonyPatch(typeof(Player), "UpdatePlacement")]
-        static class UpdatePlacement_Patch
+        public static class UpdatePlacement_Patch
         {
-            static void Prefix(Player __instance, ref float __state, float ___m_stamina)
+            public static void Prefix(Player __instance, ref float __state, float ___m_stamina)
             {
                 if (modEnabled.Value)
                 {
                     __state = ___m_stamina;
                 }
             }
-            static void Postfix(Player __instance, float __state, ref float ___m_stamina)
+            public static void Postfix(Player __instance, float __state, ref float ___m_stamina)
             {
                 if (modEnabled.Value)
                 {
@@ -149,9 +149,9 @@ namespace Regeneration
 
 
         [HarmonyPatch(typeof(FishingFloat), "Awake")]
-        static class FishingFloat_Awake_Patch
+        public static class FishingFloat_Awake_Patch
         {
-            static void Postfix(ref FishingFloat __instance)
+            public static void Postfix(ref FishingFloat __instance)
             {
                 if (modEnabled.Value)
                 {
@@ -162,9 +162,9 @@ namespace Regeneration
 
 
         [HarmonyPatch(typeof(Player), nameof(Player.UseStamina))]
-        static class UseStamina_Patch
+        public static class UseStamina_Patch
         {
-            static void Prefix(ref float v)
+            public static void Prefix(ref float v)
             {
                 if (modEnabled.Value)
                 {
@@ -174,9 +174,9 @@ namespace Regeneration
         }
 
         [HarmonyPatch(typeof(Character), nameof(Character.Heal))]
-        static class Heal_Patch
+        public static class Heal_Patch
         {
-            static void Prefix(Character __instance, ref float hp)
+            public static void Prefix(Character __instance, ref float hp)
             {
                 if (modEnabled.Value && __instance.IsPlayer())
                 {

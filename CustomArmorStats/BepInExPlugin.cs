@@ -12,10 +12,10 @@ using UnityEngine;
 
 namespace CustomArmorStats
 {
-    [BepInPlugin("aedenthorn.CustomArmorStats", "Custom Armor Stats", "0.3.0")]
+    [BepInPlugin("aedenthorn.CustomArmorStats", "Custom Armor Stats", "0.6.0")]
     public partial class BepInExPlugin : BaseUnityPlugin
     {
-        private static BepInExPlugin context;
+        public static BepInExPlugin context;
 
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<bool> isDebug;
@@ -26,10 +26,10 @@ namespace CustomArmorStats
         
         public static ConfigEntry<string> waterModifierName;
 
-        private static List<ArmorData> armorDatas;
-        private static string assetPath;
+        public static List<ArmorData> armorDatas;
+        public static string assetPath;
 
-        private enum NewDamageTypes 
+        public enum NewDamageTypes 
         {
             Water = 1024
         }
@@ -39,7 +39,7 @@ namespace CustomArmorStats
             if (isDebug.Value)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
 
             context = this;
@@ -59,9 +59,9 @@ namespace CustomArmorStats
         }
 
         [HarmonyPatch(typeof(ZNetScene), "Awake")]
-        static class ZNetScene_Awake_Patch
+        public static class ZNetScene_Awake_Patch
         {
-            static void Postfix(ZNetScene __instance)
+            public static void Postfix(ZNetScene __instance)
             {
                 if (!modEnabled.Value)
                     return;
@@ -71,9 +71,9 @@ namespace CustomArmorStats
         }
 
         [HarmonyPatch(typeof(ItemDrop), "Awake")]
-        static class ItemDrop_Awake_Patch
+        public static class ItemDrop_Awake_Patch
         {
-            static void Postfix(ItemDrop __instance)
+            public static void Postfix(ItemDrop __instance)
             {
                 if (!modEnabled.Value)
                     return;
@@ -82,9 +82,9 @@ namespace CustomArmorStats
         }
 
         [HarmonyPatch(typeof(ItemDrop), "SlowUpdate")]
-        static class ItemDrop_SlowUpdate_Patch
+        public static class ItemDrop_SlowUpdate_Patch
         {
-            static void Postfix(ref ItemDrop __instance)
+            public static void Postfix(ref ItemDrop __instance)
             {
                 if (!modEnabled.Value)
                     return;
@@ -93,9 +93,9 @@ namespace CustomArmorStats
         }
 
         [HarmonyPatch(typeof(Player), "DamageArmorDurability")]
-        static class Player_DamageArmorDurability_Patch
+        public static class Player_DamageArmorDurability_Patch
         {
-            static void Prefix(ref HitData hit)
+            public static void Prefix(ref HitData hit)
             {
                 if (!modEnabled.Value)
                     return;
@@ -104,9 +104,9 @@ namespace CustomArmorStats
         }
 
         [HarmonyPatch(typeof(Player), "GetEquipmentMovementModifier")]
-        static class GetEquipmentMovementModifier_Patch
+        public static class GetEquipmentMovementModifier_Patch
         {
-            static void Postfix(ref float __result)
+            public static void Postfix(ref float __result)
             {
                 if (!modEnabled.Value)
                     return;
@@ -114,35 +114,10 @@ namespace CustomArmorStats
             }
         }
         
-        [HarmonyPatch(typeof(Player), "GetJogSpeedFactor")]
-        static class GetJogSpeedFactor_Patch
+        [HarmonyPatch(typeof(SEMan), "AddStatusEffect", new Type[] { typeof(StatusEffect), typeof(bool), typeof(int), typeof(float) })]
+        public static class SEMan_AddStatusEffect_Patch
         {
-            static bool Prefix(ref float __result, float ___m_equipmentMovementModifier)
-            {
-                if (!modEnabled.Value)
-                    return true;
-                __result = 1 + ___m_equipmentMovementModifier * globalArmorMovementModMult.Value;
-                return false;
-            }
-        }
-                
-        [HarmonyPatch(typeof(Player), "GetRunSpeedFactor")]
-        static class GetRunSpeedFactor_Patch
-        {
-            static bool Prefix(Skills ___m_skills, float ___m_equipmentMovementModifier, ref float __result)
-            {
-                if (!modEnabled.Value)
-                    return true;
-                float skillFactor = ___m_skills.GetSkillFactor(Skills.SkillType.Run);
-                __result = (1f + skillFactor * 0.25f) * (1f + ___m_equipmentMovementModifier * 1.5f * globalArmorMovementModMult.Value);
-                return false;
-            }
-        }
-        
-        [HarmonyPatch(typeof(SEMan), "AddStatusEffect", new Type[] { typeof(StatusEffect), typeof(bool) })]
-        static class SEMan_AddStatusEffect_Patch
-        {
-            static bool Prefix(SEMan __instance, StatusEffect statusEffect, Character ___m_character, ref StatusEffect __result)
+            public static bool Prefix(SEMan __instance, StatusEffect statusEffect, Character ___m_character, ref StatusEffect __result)
             {
                 if (!modEnabled.Value || !___m_character.IsPlayer())
                     return true;
@@ -163,9 +138,9 @@ namespace CustomArmorStats
         }
         
         [HarmonyPatch(typeof(SE_Stats), "GetDamageModifiersTooltipString")]
-        static class GetDamageModifiersTooltipString_Patch
+        public static class GetDamageModifiersTooltipString_Patch
         {
-            static void Postfix(ref string __result, List<HitData.DamageModPair> mods)
+            public static void Postfix(ref string __result, List<HitData.DamageModPair> mods)
             {
                 if (!modEnabled.Value)
                     return;
@@ -206,7 +181,7 @@ namespace CustomArmorStats
         }
 
         [HarmonyPatch(typeof(Player), "UpdateEnvStatusEffects")]
-        static class UpdateEnvStatusEffects_Patch
+        public static class UpdateEnvStatusEffects_Patch
         {
             public static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
             {
@@ -234,53 +209,53 @@ namespace CustomArmorStats
 
                 return outCodes.AsEnumerable();
             }
-            static void Postfix(float dt, Player __instance, ItemDrop.ItemData ___m_chestItem, ItemDrop.ItemData ___m_legItem, ItemDrop.ItemData ___m_helmetItem, ItemDrop.ItemData ___m_shoulderItem, SEMan ___m_seman)
+            public static void Postfix(float dt, Player __instance, ItemDrop.ItemData ___m_chestItem, ItemDrop.ItemData ___m_legItem, ItemDrop.ItemData ___m_helmetItem, ItemDrop.ItemData ___m_shoulderItem, SEMan ___m_seman)
             {
                 if (!modEnabled.Value)
                     return;
-
-                if (___m_seman.HaveStatusEffect("Wet"))
+                var hash = "Wet".GetStableHashCode();
+                if (___m_seman.HaveStatusEffect(hash))
                 {
                     HitData.DamageModifier water = GetNewDamageTypeMod(NewDamageTypes.Water, ___m_chestItem, ___m_legItem, ___m_helmetItem, ___m_shoulderItem);
-                    var wet = ___m_seman.GetStatusEffect("Wet");
+                    var wet = ___m_seman.GetStatusEffect(hash);
                     var t = Traverse.Create(wet);
 
                     if (water == HitData.DamageModifier.Ignore || water == HitData.DamageModifier.Immune)
                     {
-                        ___m_seman.RemoveStatusEffect("Wet", true);
+                        ___m_seman.RemoveStatusEffect(hash, true);
                     }
-                    else if (water == HitData.DamageModifier.VeryResistant && !__instance.InLiquidSwimDepth())
+                    else if (water == HitData.DamageModifier.VeryResistant && !(bool)AccessTools.Method(typeof(Character), "InLiquidSwimDepth").Invoke(__instance, new object[] { }))
                     {
-                        ___m_seman.RemoveStatusEffect("Wet", true);
+                        ___m_seman.RemoveStatusEffect(hash, true);
                     }
                     else if (water == HitData.DamageModifier.Resistant)
                     {
                         t.Field("m_time").SetValue(t.Field("m_time").GetValue<float>() + dt);
-                        ___m_seman.RemoveStatusEffect("Wet", true);
+                        ___m_seman.RemoveStatusEffect(hash, true);
                         ___m_seman.AddStatusEffect(wet);
                     }
                     else if (water == HitData.DamageModifier.Weak)
                     {
                         t.Field("m_time").SetValue(t.Field("m_time").GetValue<float>() - dt / 3);
-                        ___m_seman.RemoveStatusEffect("Wet", true);
+                        ___m_seman.RemoveStatusEffect(hash, true);
                         ___m_seman.AddStatusEffect(wet);
                     }
                     else if (water == HitData.DamageModifier.VeryWeak)
                     {
                         t.Field("m_time").SetValue(t.Field("m_time").GetValue<float>() - dt * 2 / 3);
-                        ___m_seman.RemoveStatusEffect("Wet", true);
+                        ___m_seman.RemoveStatusEffect(hash, true);
                         ___m_seman.AddStatusEffect(wet);
                     }
                 }
             }
         }
-        private static HitData.DamageModifier GetNewDamageTypeMod(NewDamageTypes type, Character character)
+        public static HitData.DamageModifier GetNewDamageTypeMod(NewDamageTypes type, Character character)
         {
             Traverse t = Traverse.Create(character);
             return GetNewDamageTypeMod(type, t.Field("m_chestItem").GetValue<ItemDrop.ItemData>(), t.Field("m_legItem").GetValue<ItemDrop.ItemData>(), t.Field("m_helmetItem").GetValue<ItemDrop.ItemData>(), t.Field("m_shoulderItem").GetValue<ItemDrop.ItemData>());
         }
 
-        private static HitData.DamageModifier GetNewDamageTypeMod(NewDamageTypes type, ItemDrop.ItemData chestItem, ItemDrop.ItemData legItem, ItemDrop.ItemData helmetItem, ItemDrop.ItemData shoulderItem)
+        public static HitData.DamageModifier GetNewDamageTypeMod(NewDamageTypes type, ItemDrop.ItemData chestItem, ItemDrop.ItemData legItem, ItemDrop.ItemData helmetItem, ItemDrop.ItemData shoulderItem)
         {
             HitData.DamageModPair modPair = new HitData.DamageModPair();
             
@@ -307,12 +282,12 @@ namespace CustomArmorStats
             }
             return modPair.m_modifier;
         }
-        private static bool ShouldOverride(HitData.DamageModifier a, HitData.DamageModifier b)
+        public static bool ShouldOverride(HitData.DamageModifier a, HitData.DamageModifier b)
         {
             return a != HitData.DamageModifier.Ignore && (b == HitData.DamageModifier.Immune || ((a != HitData.DamageModifier.VeryResistant || b != HitData.DamageModifier.Resistant) && (a != HitData.DamageModifier.VeryWeak || b != HitData.DamageModifier.Weak)));
         }
 
-        private static void LoadAllArmorData(ZNetScene scene)
+        public static void LoadAllArmorData(ZNetScene scene)
         {
             armorDatas = GetArmorDataFromFiles();
             foreach (var armor in armorDatas)
@@ -326,7 +301,7 @@ namespace CustomArmorStats
             }
         }
 
-        private static void CheckArmorData(ref ItemDrop.ItemData instance)
+        public static void CheckArmorData(ref ItemDrop.ItemData instance)
         {
             try
             {
@@ -341,7 +316,7 @@ namespace CustomArmorStats
             }
         }
 
-        private static List<ArmorData> GetArmorDataFromFiles()
+        public static List<ArmorData> GetArmorDataFromFiles()
         {
             CheckModFolder();
 
@@ -355,7 +330,7 @@ namespace CustomArmorStats
             return armorDatas;
         }
 
-        private static void CheckModFolder()
+        public static void CheckModFolder()
         {
             if (!Directory.Exists(assetPath))
             {
@@ -364,7 +339,7 @@ namespace CustomArmorStats
             }
         }
 
-        private static void SetArmorData(ref ItemDrop.ItemData item, ArmorData armor)
+        public static void SetArmorData(ref ItemDrop.ItemData item, ArmorData armor)
         {
             item.m_shared.m_armor = armor.armor;
             item.m_shared.m_armorPerLevel = armor.armorPerLevel;
@@ -379,7 +354,7 @@ namespace CustomArmorStats
             }
         }
 
-        private static ArmorData GetArmorDataByName(string armor)
+        public static ArmorData GetArmorDataByName(string armor)
         {
             GameObject go = ObjectDB.instance.GetItemPrefab(armor);
             if (!go)
@@ -393,7 +368,7 @@ namespace CustomArmorStats
             return GetArmorDataFromItem(item, armor);
         }
 
-        private static ArmorData GetArmorDataFromItem(ItemDrop.ItemData item, string itemName)
+        public static ArmorData GetArmorDataFromItem(ItemDrop.ItemData item, string itemName)
         {
             var armor = new ArmorData()
             {
@@ -409,9 +384,9 @@ namespace CustomArmorStats
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;
@@ -421,8 +396,8 @@ namespace CustomArmorStats
                 {
                     context.Config.Reload();
                     context.Config.Save();
-                    Traverse.Create(__instance).Method("AddString", new object[] { text }).GetValue();
-                    Traverse.Create(__instance).Method("AddString", new object[] { $"{context.Info.Metadata.Name} config reloaded" }).GetValue();
+                    __instance.AddString(text);
+                    __instance.AddString($"{context.Info.Metadata.Name} config reloaded");
                     return false;
                 }
                 else if (text.ToLower().Equals($"{typeof(BepInExPlugin).Namespace.ToLower()} reload"))
@@ -430,26 +405,26 @@ namespace CustomArmorStats
                     armorDatas = GetArmorDataFromFiles();
                     if(ZNetScene.instance)
                         LoadAllArmorData(ZNetScene.instance);
-                    Traverse.Create(__instance).Method("AddString", new object[] { text }).GetValue();
-                    Traverse.Create(__instance).Method("AddString", new object[] { $"{context.Info.Metadata.Name} reloaded armor stats from files" }).GetValue();
+                    __instance.AddString(text);
+                    __instance.AddString($"{context.Info.Metadata.Name} reloaded armor stats from files");
                     return false;
                 }
                 else if (text.ToLower().Equals($"{typeof(BepInExPlugin).Namespace.ToLower()} damagetypes"))
                 {
-                    Traverse.Create(__instance).Method("AddString", new object[] { text }).GetValue();
+                    __instance.AddString(text);
                     
                     Dbgl("\r\n" + string.Join("\r\n", Enum.GetNames(typeof(HitData.DamageType))));
 
-                    Traverse.Create(__instance).Method("AddString", new object[] { $"{context.Info.Metadata.Name} dumped damage types" }).GetValue();
+                    __instance.AddString($"{context.Info.Metadata.Name} dumped damage types");
                     return false;
                 }
                 else if (text.ToLower().Equals($"{typeof(BepInExPlugin).Namespace.ToLower()} damagemods"))
                 {
-                    Traverse.Create(__instance).Method("AddString", new object[] { text }).GetValue();
+                    __instance.AddString(text);
 
                     Dbgl("\r\n"+string.Join("\r\n", Enum.GetNames(typeof(HitData.DamageModifier))));
 
-                    Traverse.Create(__instance).Method("AddString", new object[] { $"{context.Info.Metadata.Name} dumped damage modifiers" }).GetValue();
+                    __instance.AddString($"{context.Info.Metadata.Name} dumped damage modifiers");
                     return false;
                 }
                 else if (text.ToLower().StartsWith($"{typeof(BepInExPlugin).Namespace.ToLower()} save "))
@@ -461,8 +436,8 @@ namespace CustomArmorStats
                         return false;
                     CheckModFolder();
                     File.WriteAllText(Path.Combine(assetPath, armorData.name + ".json"), JsonUtility.ToJson(armorData, true));
-                    Traverse.Create(__instance).Method("AddString", new object[] { text }).GetValue();
-                    Traverse.Create(__instance).Method("AddString", new object[] { $"{context.Info.Metadata.Name} saved armor data to {armor}.json" }).GetValue();
+                    __instance.AddString(text);
+                    __instance.AddString($"{context.Info.Metadata.Name} saved armor data to {armor}.json");
                     return false;
                 }
                 else if (text.ToLower().StartsWith($"{typeof(BepInExPlugin).Namespace.ToLower()} dump "))
@@ -473,8 +448,8 @@ namespace CustomArmorStats
                     if (armorData == null)
                         return false;
                     Dbgl(JsonUtility.ToJson(armorData));
-                    Traverse.Create(__instance).Method("AddString", new object[] { text }).GetValue();
-                    Traverse.Create(__instance).Method("AddString", new object[] { $"{context.Info.Metadata.Name} dumped {armor}" }).GetValue();
+                    __instance.AddString(text);
+                    __instance.AddString($"{context.Info.Metadata.Name} dumped {armor}");
                     return false;
                 }
                 else if (text.ToLower().StartsWith($"{typeof(BepInExPlugin).Namespace.ToLower()}"))
@@ -486,8 +461,8 @@ namespace CustomArmorStats
                     + $"{context.Info.Metadata.Name} damagetypes\r\n"
                     + $"{context.Info.Metadata.Name} damagemods";
 
-                    Traverse.Create(__instance).Method("AddString", new object[] { text }).GetValue();
-                    Traverse.Create(__instance).Method("AddString", new object[] { output }).GetValue();
+                    __instance.AddString(text);
+                    __instance.AddString(output);
                     return false;
                 }
                 return true;

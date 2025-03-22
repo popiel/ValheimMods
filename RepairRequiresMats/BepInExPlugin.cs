@@ -6,15 +6,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
 namespace RepairRequiresMats
 {
-    [BepInPlugin("aedenthorn.RepairRequiresMats", "Repair Requires Mats", "0.4.3")]
+    [BepInPlugin("aedenthorn.RepairRequiresMats", "Repair Requires Mats", "0.6.1")]
     public class BepInExPlugin : BaseUnityPlugin
     {
-        private static bool isDebug = true;
+        public static bool isDebug = true;
 
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<bool> showAllRepairsInToolTip;
@@ -23,17 +23,21 @@ namespace RepairRequiresMats
         public static ConfigEntry<string> hasEnoughTooltipColor;
         public static ConfigEntry<string> notEnoughTooltipColor;
         public static ConfigEntry<int> nexusID;
-        private static List<ItemDrop.ItemData> orderedWornItems = new List<ItemDrop.ItemData>();
+        public static List<ItemDrop.ItemData> orderedWornItems = new List<ItemDrop.ItemData>();
 
-        private static BepInExPlugin context;
-        private static Assembly epicLootAssembly;
+        public static BepInExPlugin context;
+
+        public static Assembly epicLootAssembly;
+        public static MethodInfo epicLootIsMagic;
+        public static MethodInfo epicLootGetRarity;
+        public static MethodInfo epicLootGetEnchantCosts;
 
         public static void Dbgl(string str = "", bool pref = true)
         {
             if (isDebug)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
             modEnabled = Config.Bind<bool>("General", "Enabled", true, "Enable this mod");
@@ -47,18 +51,24 @@ namespace RepairRequiresMats
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), null);
 
         }
-        private void Start()
+        public void Start()
         {
-            if(Chainloader.PluginInfos.ContainsKey("randyknapp.mods.epicloot"))
+            if (Chainloader.PluginInfos.ContainsKey("randyknapp.mods.epicloot"))
+            {
                 epicLootAssembly = Chainloader.PluginInfos["randyknapp.mods.epicloot"].Instance.GetType().Assembly;
+                epicLootIsMagic = epicLootAssembly.GetType("EpicLoot.ItemDataExtensions").GetMethod("IsMagic", BindingFlags.Public | BindingFlags.Static, null, new Type[] { typeof(ItemDrop.ItemData) }, null);
+                epicLootGetRarity = epicLootAssembly.GetType("EpicLoot.ItemDataExtensions").GetMethod("GetRarity", BindingFlags.Public | BindingFlags.Static);
+                epicLootGetEnchantCosts = epicLootAssembly.GetType("EpicLoot.Crafting.EnchantTabController").GetMethod("GetEnchantCosts", BindingFlags.Public | BindingFlags.Static);
+                Dbgl($"Loaded Epic Loot assembly; epicLootIsMagic {epicLootIsMagic != null}, epicLootGetRarity {epicLootGetRarity != null}, epicLootGetEnchantCosts {epicLootGetEnchantCosts != null}");
+            }
 
         }
 
 
         [HarmonyPatch(typeof(UITooltip), "LateUpdate")]
-        static class UITooltip_LateUpdate_Patch
+        public static class UITooltip_LateUpdate_Patch
         {
-            static void Postfix(UITooltip __instance, UITooltip ___m_current, GameObject ___m_tooltip)
+            public static void Postfix(UITooltip __instance, UITooltip ___m_current, GameObject ___m_tooltip)
             {
 
                 if (!modEnabled.Value)
@@ -73,9 +83,9 @@ namespace RepairRequiresMats
 
 
         [HarmonyPatch(typeof(InventoryGui), "UpdateRepair")]
-        static class InventoryGui_UpdateRepair_Patch
+        public static class InventoryGui_UpdateRepair_Patch
         {
-            static void Postfix(InventoryGui __instance, ref List<ItemDrop.ItemData> ___m_tempWornItems)
+            public static void Postfix(InventoryGui __instance, ref List<ItemDrop.ItemData> ___m_tempWornItems)
             {
                 if (!modEnabled.Value)
                     return;
@@ -157,16 +167,16 @@ namespace RepairRequiresMats
                 if (go == null || tt.transform.name != "RepairButton")
                     return;
 
-                Utils.FindChild(go.transform, "Text").GetComponent<Text>().supportRichText = true;
-                Utils.FindChild(go.transform, "Text").GetComponent<Text>().alignment = TextAnchor.LowerCenter;
-                Utils.FindChild(go.transform, "Text").GetComponent<Text>().text = $"<b><color=#{titleTooltipColor.Value}>{Localization.instance.Localize("$inventory_repairbutton")}</color></b>\r\n" + string.Join("\r\n", outstring);
+                Utils.FindChild(go.transform, "Text").GetComponent<TMP_Text>().richText = true;
+                Utils.FindChild(go.transform, "Text").GetComponent<TMP_Text>().alignment = TextAlignmentOptions.Bottom;
+                Utils.FindChild(go.transform, "Text").GetComponent<TMP_Text>().text = $"<b><color=#{titleTooltipColor.Value}>{Localization.instance.Localize("$inventory_repairbutton")}</color></b>\r\n" + string.Join("\r\n", outstring);
             }
         }
 
         [HarmonyPatch(typeof(InventoryGui), "CanRepair")]
-        static class InventoryGui_CanRepair_Patch
+        public static class InventoryGui_CanRepair_Patch
         {
-            static void Postfix(ItemDrop.ItemData item, ref bool __result)
+            public static void Postfix(ItemDrop.ItemData item, ref bool __result)
             {
                 if (!modEnabled.Value)
                     return;
@@ -222,29 +232,39 @@ namespace RepairRequiresMats
             }
         }
 
-        private static List<Piece.Requirement> RepairReqs(ItemDrop.ItemData item, bool log = false)
+        public static List<Piece.Requirement> RepairReqs(ItemDrop.ItemData item, bool log = false)
         {
             float percent = (item.GetMaxDurability() - item.m_durability) / item.GetMaxDurability();
             Recipe fullRecipe = ObjectDB.instance.GetRecipe(item);
+            if (fullRecipe is null)
+                return null;
             var fullReqs = new List<Piece.Requirement>(fullRecipe.m_resources);
 
             bool isMagic = false;
             if (epicLootAssembly != null)
             {
-                isMagic = (bool)epicLootAssembly.GetType("EpicLoot.ItemDataExtensions").GetMethod("IsMagic", BindingFlags.Public | BindingFlags.Static, null, new Type[] { typeof(ItemDrop.ItemData) }, null).Invoke(null, new[] { item });
+                try
+                {
+                    isMagic = (bool)epicLootIsMagic.Invoke(null, new[] { item });
+                }
+                catch { }
             }
             if (isMagic)
             {
-                int rarity = (int)epicLootAssembly.GetType("EpicLoot.ItemDataExtensions").GetMethod("GetRarity", BindingFlags.Public | BindingFlags.Static).Invoke(null, new[] { item });
-                List<KeyValuePair<ItemDrop, int>> magicReqs =  (List<KeyValuePair<ItemDrop, int>>)epicLootAssembly.GetType("EpicLoot.Crafting.EnchantTabController").GetMethod("GetEnchantCosts", BindingFlags.Public | BindingFlags.Static).Invoke(null, new object[] { item, rarity });
-                foreach(var kvp in magicReqs)
+                try
                 {
-                    fullReqs.Add(new Piece.Requirement()
+                    int rarity = (int)epicLootGetRarity.Invoke(null, new[] { item });
+                    List<KeyValuePair<ItemDrop, int>> magicReqs = (List<KeyValuePair<ItemDrop, int>>)epicLootGetEnchantCosts.Invoke(null, new object[] { item, rarity });
+                    foreach (var kvp in magicReqs)
                     {
-                        m_amount = kvp.Value,
-                        m_resItem = kvp.Key
-                    });
+                        fullReqs.Add(new Piece.Requirement()
+                        {
+                            m_amount = kvp.Value,
+                            m_resItem = kvp.Key
+                        });
+                    }
                 }
+                catch { }
             }
 
             
@@ -288,9 +308,9 @@ namespace RepairRequiresMats
 
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

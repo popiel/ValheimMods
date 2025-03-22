@@ -11,10 +11,10 @@ using UnityEngine.Networking;
 
 namespace HereFishy
 {
-    [BepInPlugin("aedenthorn.HereFishy", "Here Fishy", "0.4.0")]
+    [BepInPlugin("aedenthorn.HereFishy", "Here Fishy", "0.6.0")]
     public class BepInExPlugin : BaseUnityPlugin
     {
-        private static readonly bool isDebug = true;
+        public static readonly bool isDebug = true;
 
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<int> nexusID;
@@ -28,21 +28,21 @@ namespace HereFishy
         public static ConfigEntry<float> jumpSpeed;
         public static ConfigEntry<float> jumpHeight;
 
-        private static BepInExPlugin context;
-        private static AudioClip fishyClip;
-        private static AudioClip weeClip;
-        private static AudioSource fishAudio;
-        private static float lastHereFishy;
+        public static BepInExPlugin context;
+        public static AudioClip fishyClip;
+        public static AudioClip weeClip;
+        public static AudioSource fishAudio;
+        public static float lastHereFishy;
 
 
-        private static List<GameObject> hereFishyFishies = new List<GameObject>();
+        public static List<GameObject> hereFishyFishies = new List<GameObject>();
 
         public static void Dbgl(string str = "", bool pref = true)
         {
             if (isDebug)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
             
@@ -66,7 +66,7 @@ namespace HereFishy
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), null);
 
         }
-        private void Update()
+        public void Update()
         {
             if (!modEnabled.Value || Player.m_localPlayer == null || !Traverse.Create(Player.m_localPlayer).Method("TakeInput").GetValue<bool>())
                 return;
@@ -88,17 +88,14 @@ namespace HereFishy
                 }
                 float closest = maxFishyDistance.Value;
                 Fish closestFish = null;
-                foreach (Collider collider in Physics.OverlapSphere(Player.m_localPlayer.transform.position, maxFishyDistance.Value))
+                foreach (Fish fish in Fish.Instances)
                 {
-                    Fish fish = collider.transform.parent?.gameObject?.GetComponent<Fish>();
-                    if (fish?.GetComponent<ZNetView>()?.IsValid() == true)
+                    if (Vector3.Distance(Player.m_localPlayer.transform.position, fish.transform.position) < closest)
                     {
-                        //Dbgl($"got fishy at {fish.gameObject.transform.position}");
-
                         float distance = Vector3.Distance(Player.m_localPlayer.transform.position, fish.gameObject.transform.position);
                         if (distance < closest && !hereFishyFishies.Contains(fish.gameObject))
                         {
-                            //Dbgl($"closest fishy");
+                            //Dbgl($"got closer fishy at {fish.gameObject.transform.position} ({which})");
                             closest = distance;
                             closestFish = fish;
                         }
@@ -113,7 +110,7 @@ namespace HereFishy
             }
         }
 
-        private static IEnumerator FishJump(Fish fish, float secs)
+        public static IEnumerator FishJump(Fish fish, float secs)
         {
             Vector3 origPos = fish.gameObject.transform.position;
             Vector3 flatPos = origPos;
@@ -266,18 +263,18 @@ namespace HereFishy
 
 
         [HarmonyPatch(typeof(CharacterAnimEvent), "GPower")]
-        static class CharacterAnimEvent_GPower_Patch
+        public static class CharacterAnimEvent_GPower_Patch
         {
-            static bool Prefix()
+            public static bool Prefix()
             {
-                return (Time.realtimeSinceStartup - lastHereFishy > fishyClip.length);
+                return (fishyClip is null || Time.realtimeSinceStartup - lastHereFishy > fishyClip.length);
             }
         }
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

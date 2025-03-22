@@ -2,6 +2,7 @@
 using BepInEx.Configuration;
 using HarmonyLib;
 using System.Collections.Generic;
+using System.Globalization;
 using UnityEngine;
 
 namespace DamageMod
@@ -9,9 +10,9 @@ namespace DamageMod
     [BepInPlugin("aedenthorn.DamageMod", "Damage Mod", "0.3.0")]
     public class BepInExPlugin: BaseUnityPlugin
     {
-        private static readonly bool isDebug = true;
-        private static BepInExPlugin context;
-        private Harmony harmony;
+        public static readonly bool isDebug = true;
+        public static BepInExPlugin context;
+        public Harmony harmony;
 
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<int> nexusID;
@@ -32,7 +33,7 @@ namespace DamageMod
             if (isDebug)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
 
@@ -51,19 +52,25 @@ namespace DamageMod
 
             SetCustomDamages();
 
-
+            customAttackerDamageMult.SettingChanged += SettingChanged;
+            customDefenderDamageMult.SettingChanged += SettingChanged;
 
             harmony = new Harmony(Info.Metadata.GUID);
             harmony.PatchAll();
         }
 
-        private static void SetCustomDamages()
+        public void SettingChanged(object sender, System.EventArgs e)
+        {
+            SetCustomDamages();
+        }
+
+        public static void SetCustomDamages()
         {
             Dbgl(customAttackerDamageMult.Value);
             Dbgl(customDefenderDamageMult.Value);
             foreach (string pair in customAttackerDamageMult.Value.Split(','))
             {
-                if (!pair.Contains(":") || !float.TryParse(pair.Split(':')[1], out float result))
+                if (!pair.Contains(":") || !float.TryParse(pair.Split(':')[1], NumberStyles.Any, CultureInfo.InvariantCulture,  out float result))
                     continue;
 
                 attackerMults.Add(pair.Split(':')[0], result);
@@ -71,7 +78,7 @@ namespace DamageMod
 
             foreach (string pair in customDefenderDamageMult.Value.Split(','))
             {
-                if (!pair.Contains(":") || !float.TryParse(pair.Split(':')[1], out float result))
+                if (!pair.Contains(":") || !float.TryParse(pair.Split(':')[1], NumberStyles.Any, CultureInfo.InvariantCulture, out float result))
                     continue;
 
                 defenderMults.Add(pair.Split(':')[0], result);
@@ -79,9 +86,9 @@ namespace DamageMod
         }
 
         [HarmonyPatch(typeof(Character), "RPC_Damage")]
-        static class RPC_Damage_Patch
+        public static class RPC_Damage_Patch
         {
-            static void Prefix(Character __instance, ref HitData hit)
+            public static void Prefix(Character __instance, ref HitData hit)
             {
                 if (!modEnabled.Value)
                     return;
@@ -111,9 +118,9 @@ namespace DamageMod
 
 
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

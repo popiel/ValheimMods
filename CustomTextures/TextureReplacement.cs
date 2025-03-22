@@ -1,7 +1,6 @@
 ﻿using BepInEx;
 using HarmonyLib;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
@@ -11,13 +10,22 @@ namespace CustomTextures
     public partial class BepInExPlugin : BaseUnityPlugin
     {
 
-        private static void ReplaceObjectDBTextures()
+        public static void ReplaceObjectDBTextures()
         {
             logDump.Clear();
             ObjectDB objectDB = ObjectDB.instance;
 
-
-            Texture2D tex = LoadTexture("atlas_item_icons", objectDB.m_items[0]?.GetComponent<ItemDrop>()?.m_itemData?.m_shared?.m_icons[0]?.texture, false, true, true);
+            Texture2D vanilla = null;
+            foreach(var go in objectDB.m_items)
+            {
+                if(go?.GetComponent<ItemDrop>()?.m_itemData?.m_shared?.m_icons.Length > 0)
+                {
+                    vanilla = go.GetComponent<ItemDrop>().m_itemData.m_shared.m_icons[0].texture;
+                    Dbgl($"got atlas at item: {go.name}");
+                    break;
+                }
+            }
+            Texture2D tex = LoadTexture("atlas_item_icons", vanilla, false, true, true);
             Dbgl($"Replacing textures for {objectDB.m_items.Count} objects");
             foreach (GameObject go in objectDB.m_items)
             {
@@ -42,44 +50,17 @@ namespace CustomTextures
                     }
                 }
             }
-            Traverse.Create(objectDB).Method("UpdateItemHashes").GetValue();
+            Traverse.Create(objectDB).Method("UpdateRegisters").GetValue();
 
             if (logDump.Any())
                 Dbgl("\n" + string.Join("\n", logDump));
         }
 
-        private static void ReplaceZNetSceneTextures()
+        public static void ReplaceZNetSceneTextures()
         {
             logDump.Clear();
 
             List<GameObject> gos = new List<GameObject>();
-
-            SkinnedMeshRenderer[] smrs = FindObjectsOfType<SkinnedMeshRenderer>();
-            MeshRenderer[] mrs = FindObjectsOfType<MeshRenderer>();
-            ParticleSystemRenderer[] psrs = FindObjectsOfType<ParticleSystemRenderer>();
-            LineRenderer[] lrs = FindObjectsOfType<LineRenderer>();
-
-            foreach (var r in smrs)
-            {
-                if (!gos.Contains(r.gameObject))
-                    gos.Add(r.gameObject);
-            }
-            foreach (var r in mrs)
-            {
-                if (!gos.Contains(r.gameObject))
-                    gos.Add(r.gameObject);
-            }
-            foreach (var r in psrs)
-            {
-                if (!gos.Contains(r.gameObject))
-                    gos.Add(r.gameObject);
-            }
-            foreach (var r in lrs)
-            {
-                if (!gos.Contains(r.gameObject))
-                    gos.Add(r.gameObject);
-            }
-
 
             foreach (ClutterSystem.Clutter clutter in ClutterSystem.instance.m_clutter)
             {
@@ -90,7 +71,7 @@ namespace CustomTextures
             var namedPrefabs = ((Dictionary<int, GameObject>)AccessTools.Field(typeof(ZNetScene), "m_namedPrefabs").GetValue(ZNetScene.instance)).Values;
             foreach (GameObject go in namedPrefabs)
             {
-                if (!gos.Contains(go))
+                if (go != null && !gos.Contains(go))
                     gos.Add(go);
             }
 
@@ -98,10 +79,9 @@ namespace CustomTextures
 
             foreach (GameObject gameObject in gos)
             {
-
-                if (gameObject.name == "_NetSceneRoot")
+                if (gameObject == null || gameObject.name == "_NetSceneRoot")
                     continue;
-
+                }
                 ReplaceOneGameObjectTextures(gameObject, gameObject.name, "object");
             }
 
@@ -112,7 +92,42 @@ namespace CustomTextures
 
         }
 
-        private static void ReplaceSkyBoxTexture()
+
+        public static void ReplaceSceneObjects()
+        {
+
+            SkinnedMeshRenderer[] smrs = FindObjectsOfType<SkinnedMeshRenderer>();
+            MeshRenderer[] mrs = FindObjectsOfType<MeshRenderer>();
+            ParticleSystemRenderer[] psrs = FindObjectsOfType<ParticleSystemRenderer>();
+            InstanceRenderer[] irs = FindObjectsOfType<InstanceRenderer>();
+            LineRenderer[] lrs = FindObjectsOfType<LineRenderer>();
+            ItemDrop[] ids = FindObjectsOfType<ItemDrop>();
+            Dbgl($"smrs {smrs.Length}, mrs {mrs.Length}, psrs {psrs.Length}, lrs {lrs.Length}, ids {ids.Length}");
+
+            List<Component> objects = new List<Component>();
+            objects.AddRange(smrs);
+            objects.AddRange(mrs);
+            objects.AddRange(psrs);
+            objects.AddRange(irs);
+            objects.AddRange(lrs);
+            objects.AddRange(ids);
+            foreach (var r in objects)
+            {
+                var t = r.transform;
+                var go = r.gameObject;
+                while (t.parent != null)
+                {
+                    if (t.GetComponent<MeshRenderer>() != null || t.GetComponent<SkinnedMeshRenderer>() != null || t.GetComponent<InstanceRenderer>() != null || t.GetComponent<LineRenderer>() != null || t.GetComponent<ParticleSystemRenderer>() != null || t.GetComponent<ItemDrop>() != null)
+                    {
+                        go = t.gameObject;
+                    }
+                    t = t.parent;
+                }
+                ReplaceOneGameObjectTextures(go, go.name, "object");
+            }
+
+        }
+        public static void ReplaceSkyBoxTexture()
         {
             if (customTextures.ContainsKey("skybox_StarFieldTex"))
             {
@@ -151,7 +166,7 @@ namespace CustomTextures
                 Dbgl($"set moon texture");
             }
         }
-        private static void ReplaceZoneSystemTextures(ZoneSystem __instance)
+        public static void ReplaceZoneSystemTextures(ZoneSystem __instance)
         {
 
             Dbgl($"Reloading ZoneSystem textures {__instance.name} {__instance.m_zonePrefab.name}");
@@ -159,22 +174,22 @@ namespace CustomTextures
             ReplaceOneZoneTextures(__instance.name, __instance.m_zonePrefab);
         }
 
-        private static void ReplaceOneZoneTextures(string zoneSystem, GameObject prefab)
+        public static void ReplaceOneZoneTextures(string zoneSystem, GameObject prefab)
         {
             ReplaceOneGameObjectTextures(prefab, zoneSystem, "zone");
 
             Heightmap hm = prefab.transform.Find("Terrain")?.GetComponent<Heightmap>();
             Material mat = hm?.m_material;
 
-            if (mat != null)
+            if (mat != null && AccessTools.Field(typeof(Heightmap), "m_meshRenderer").GetValue(hm) != null)
             {
                 outputDump.Add($"terrain {zoneSystem}, prefab {prefab.name}");
-                ReplaceMaterialTextures(prefab.name, mat, zoneSystem, "terrain", "Terrain", prefab.name);
+                ReplaceMaterialTextures(prefab.name, mat, zoneSystem, "terrain", "Terrain", prefab.name, dumpSceneTextures.Value);
                 hm.Regenerate();
             }
         }
         
-        private static void ReplaceLocationTextures()
+        public static void ReplaceLocationTextures()
         {
             if (!dumpSceneTextures.Value)
             {
@@ -214,7 +229,7 @@ namespace CustomTextures
             }
         }
 
-        private static void ReplaceHeightmapTextures()
+        public static void ReplaceHeightmapTextures()
         {
 
             Dbgl($"Reloading Heightmap textures for {Heightmap.GetAllHeightmaps().Count} heightmaps");
@@ -231,7 +246,7 @@ namespace CustomTextures
                 if (mat != null)
                 {
                     outputDump.Add($"terrain {zoneSystem.name}, prefab {zoneSystem.m_zonePrefab}");
-                    ReplaceMaterialTextures(zoneSystem.m_zonePrefab.name, mat, zoneSystem.name, "terrain", "Terrain", zoneSystem.m_zonePrefab.name);
+                    ReplaceMaterialTextures(zoneSystem.m_zonePrefab.name, mat, zoneSystem.name, "terrain", "Terrain", zoneSystem.m_zonePrefab.name, dumpSceneTextures.Value);
                     hm.Regenerate();
                 }
             }
@@ -243,18 +258,18 @@ namespace CustomTextures
                 if (mat != null)
                 {
                     outputDump.Add($"terrain {zoneSystem.name}, prefab {zoneSystem.m_zonePrefab}");
-                    ReplaceMaterialTextures(zoneSystem.m_zonePrefab.name, mat, zoneSystem.name, "terrain", "Terrain", zoneSystem.m_zonePrefab.name);
+                    ReplaceMaterialTextures(zoneSystem.m_zonePrefab.name, mat, zoneSystem.name, "terrain", "Terrain", zoneSystem.m_zonePrefab.name, dumpSceneTextures.Value);
                 }
             }
             if (logDump.Any())
                 Dbgl("\n" + string.Join("\n", logDump));
         }
-        private static void ReplaceEnvironmentTextures()
+        public static void ReplaceEnvironmentTextures()
         {
 
             Dbgl($"Reloading Environment textures");
 
-            GameObject env = GameObject.Find("_GameMain/environment");
+            GameObject env = GameObject.Find("_GameMain/_Environment");
             if (env != null)
             {
                 int count = env.transform.childCount;
@@ -273,7 +288,7 @@ namespace CustomTextures
 
         }
 
-        private static void SetEquipmentTexture(string itemName, GameObject item)
+        public static void SetEquipmentTexture(string itemName, GameObject item)
         {
             if (item != null && itemName != null && itemName.Length > 0)
             {
@@ -281,7 +296,7 @@ namespace CustomTextures
             }
         }
 
-        private static void SetEquipmentListTexture(string itemName, List<GameObject> items)
+        public static void SetEquipmentListTexture(string itemName, List<GameObject> items)
         {
             if (items != null && items.Any() && itemName != null && itemName.Length > 0)
             {
@@ -295,13 +310,15 @@ namespace CustomTextures
             }
         }
 
-        private static void SetBodyEquipmentTexture(VisEquipment instance, string itemName, SkinnedMeshRenderer smr, List<GameObject> itemInstances)
+        public static void SetBodyEquipmentTexture(VisEquipment instance, string itemName, SkinnedMeshRenderer smr, List<GameObject> itemInstances)
         {
             if (smr != null)
                 ReplaceOneGameObjectTextures(smr.gameObject, itemName, "object");
             if (itemInstances != null)
                 foreach (GameObject go in itemInstances)
-                   ReplaceOneGameObjectTextures(go, itemName, "object");
+                {
+                    ReplaceOneGameObjectTextures(go, itemName, "object");
+                }
         }
     }
 }

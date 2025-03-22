@@ -1,39 +1,40 @@
 ﻿using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
+using System;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 namespace GrassTweaks
 {
-    [BepInPlugin("aedenthorn.GrassTweaks", "Grass Tweaks", "0.2.0")]
+    [BepInPlugin("aedenthorn.GrassTweaks", "Grass Tweaks", "0.5.0")]
     public class BepInExPlugin: BaseUnityPlugin
     {
-        private static readonly bool isDebug = true;
-        private static BepInExPlugin context;
+        public static readonly bool isDebug = true;
+        public static BepInExPlugin context;
         
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<int> nexusID;
 
         public static ConfigEntry<bool> useLod;
         public static ConfigEntry<bool> useXZLodDistance;
-        private static ConfigEntry<float> lodMinDistanceMult;
-        private static ConfigEntry<float> lodMaxDistanceMult;
-        private static ConfigEntry<float> scaleMinMult;
-        private static ConfigEntry<float> scaleMaxMult;
-        private static ConfigEntry<float> amountMult;
-        private static ConfigEntry<float> clutterDistance;
-        private static ConfigEntry<float> grassPatchSize;
-        private static ConfigEntry<float> playerPushFade;
-        private static ConfigEntry<ShadowCastingMode> shadowCastingMode;
+        public static ConfigEntry<float> lodMinDistanceMult;
+        public static ConfigEntry<float> lodMaxDistanceMult;
+        public static ConfigEntry<float> scaleMinMult;
+        public static ConfigEntry<float> scaleMaxMult;
+        public static ConfigEntry<float> amountMult;
+        public static ConfigEntry<float> clutterDistance;
+        public static ConfigEntry<float> grassPatchSize;
+        public static ConfigEntry<float> playerPushFade;
+        public static ConfigEntry<ShadowCastingMode> shadowCastingMode;
 
         public static void Dbgl(string str = "", bool pref = true)
         {
             if (isDebug)
                 Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
-        private void Awake()
+        public void Awake()
         {
             context = this;
             modEnabled = Config.Bind<bool>("General", "Enabled", true, "Enable this mod");
@@ -59,9 +60,9 @@ namespace GrassTweaks
 
 
         [HarmonyPatch(typeof(ClutterSystem), "Awake")]
-        static class GenerateVegPatch_Patch
+        public static class ClutterSystem_Awake_Patch
         {
-            static void Prefix(ClutterSystem __instance)
+            public static void Prefix(ClutterSystem __instance)
             {
                 if (!modEnabled.Value)
                     return;
@@ -78,26 +79,25 @@ namespace GrassTweaks
                 }
             }
         }
-        [HarmonyPatch(typeof(InstanceRenderer))]
-        [HarmonyPatch(MethodType.Constructor)]
-        static class InstanceRenderer_Patch
+        [HarmonyPatch(typeof(MonoBehaviour), MethodType.Constructor, new Type[] { })]
+        public static class MonoBehaviour_Patch
         {
-            static void Postfix(InstanceRenderer __instance)
+            public static void Postfix(MonoBehaviour __instance)
             {
-                if (!modEnabled.Value)
+                if (!modEnabled.Value || !(__instance is InstanceRenderer))
                     return;
-
-                __instance.m_lodMinDistance *= lodMinDistanceMult.Value;
-                __instance.m_lodMaxDistance *= lodMaxDistanceMult.Value;
-                __instance.m_shadowCasting = shadowCastingMode.Value;
-                __instance.m_useLod = useLod.Value;
-                __instance.m_useXZLodDistance = useXZLodDistance.Value;
-            }
+                var i = __instance as InstanceRenderer;
+                i.m_lodMinDistance *= lodMinDistanceMult.Value;
+                i.m_lodMaxDistance *= lodMaxDistanceMult.Value;
+                i.m_shadowCasting = shadowCastingMode.Value;
+                i.m_useLod = useLod.Value;
+                i.m_useXZLodDistance = useXZLodDistance.Value;
+            }   
         }
         [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        public static class InputText_Patch
         {
-            static bool Prefix(Terminal __instance)
+            public static bool Prefix(Terminal __instance)
             {
                 if (!modEnabled.Value)
                     return true;

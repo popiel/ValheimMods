@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -6,32 +7,13 @@ namespace ExtendedPlayerInventory
 {
     public class QuickAccessBar : MonoBehaviour
     {
-		private void Update()
+		public void Update()
 		{
 			Player localPlayer = Player.m_localPlayer;
-			if (localPlayer && !InventoryGui.IsVisible() && !Menu.IsVisible() && !GameCamera.InFreeFly())
-			{
-				if (ZInput.GetButtonDown("JoyDPadLeft"))
-				{
-					m_selected = Mathf.Max(0, m_selected - 1);
-				}
-				if (ZInput.GetButtonDown("JoyDPadRight"))
-				{
-					m_selected = Mathf.Min(m_elements.Count - 1, m_selected + 1);
-				}
-				if (ZInput.GetButtonDown("JoyDPadUp"))
-				{
-					localPlayer.UseHotbarItem(m_selected + 1);
-				}
-			}
-			if (m_selected > m_elements.Count - 1)
-			{
-				m_selected = Mathf.Max(0, m_elements.Count - 1);
-			}
 			UpdateIcons(localPlayer);
 		}
 
-		private void UpdateIcons(Player player)
+		public void UpdateIcons(Player player)
 		{
 			if (!player || player.IsDead())
 			{
@@ -75,10 +57,10 @@ namespace ExtendedPlayerInventory
 					ElementData elementData = new ElementData();
 					elementData.m_go = Instantiate(m_elementPrefab, transform);
 					elementData.m_go.transform.localPosition = new Vector3(i * m_elementSpace, 0f, 0f);
-					elementData.m_go.transform.Find("binding").GetComponent<Text>().text = BepInExPlugin.hotkeys[i].Value;
+					BepInExPlugin.SetSlotText(BepInExPlugin.hotkeys[i].Value, elementData.m_go.transform, false);
 					elementData.m_icon = elementData.m_go.transform.transform.Find("icon").GetComponent<Image>();
 					elementData.m_durability = elementData.m_go.transform.Find("durability").GetComponent<GuiBar>();
-					elementData.m_amount = elementData.m_go.transform.Find("amount").GetComponent<Text>();
+					elementData.m_amount = elementData.m_go.transform.Find("amount").GetComponent<TMP_Text>();
 					elementData.m_equiped = elementData.m_go.transform.Find("equiped").gameObject;
 					elementData.m_queued = elementData.m_go.transform.Find("queued").gameObject;
 					elementData.m_selection = elementData.m_go.transform.Find("selected").gameObject;
@@ -112,8 +94,8 @@ namespace ExtendedPlayerInventory
 						elementData.m_durability.ResetColor();
 					}
 				}
-				elementData.m_equiped.SetActive(itemData2.m_equiped);
-				elementData.m_queued.SetActive(player.IsItemQueued(itemData2));
+				elementData.m_equiped.SetActive(itemData2.m_equipped);
+				elementData.m_queued.SetActive(player.IsEquipActionQueued(itemData2));
 				if (itemData2.m_shared.m_maxStackSize > 1)
 				{
 					elementData.m_amount.gameObject.SetActive(true);
@@ -144,13 +126,13 @@ namespace ExtendedPlayerInventory
 
 		public float m_elementSpace = 70f;
 
-		private int m_selected;
+		public int m_selected;
 
-		private List<ElementData> m_elements = new List<ElementData>();
+		public List<ElementData> m_elements = new List<ElementData>();
 
-		private List<ItemDrop.ItemData> m_items = new List<ItemDrop.ItemData>();
+		public List<ItemDrop.ItemData> m_items = new List<ItemDrop.ItemData>();
 
-		private class ElementData
+		public class ElementData
 		{
 				public bool m_used;
 
@@ -160,7 +142,7 @@ namespace ExtendedPlayerInventory
 
 				public GuiBar m_durability;
 
-				public Text m_amount;
+				public TMP_Text m_amount;
 
 				public GameObject m_equiped;
 
