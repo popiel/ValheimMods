@@ -13,7 +13,7 @@ using UnityEngine;
 
 namespace CraftFromContainers
 {
-    [BepInPlugin("aedenthorn.CraftFromContainers", "Craft From Containers", "3.7.5")]
+    [BepInPlugin("aedenthorn.CraftFromContainers", "Craft From Containers", "3.8.3")]
     public class BepInExPlugin: BaseUnityPlugin
     {
         public static bool wasAllowed;
@@ -26,7 +26,7 @@ namespace CraftFromContainers
         public static ConfigEntry<float> ghostConnectionRemovalDelay;
 
         //public static ConfigEntry<bool> ignoreRangeInBuildArea;
-        public static ConfigEntry<float> m_range;
+        public static ConfigEntry<float> maxRange;
         public static ConfigEntry<Color> flashColor;
         public static ConfigEntry<Color> unFlashColor;
         public static ConfigEntry<string> resourceString;
@@ -34,6 +34,7 @@ namespace CraftFromContainers
         public static ConfigEntry<string> fuelDisallowTypes;
         public static ConfigEntry<string> oreDisallowTypes;
         public static ConfigEntry<bool> leaveOne;
+        public static ConfigEntry<bool> pullByDistance;
 
         public static ConfigEntry<string> pullItemsKey;
         public static ConfigEntry<string> preventModKey;
@@ -83,7 +84,7 @@ namespace CraftFromContainers
             isDebug = Config.Bind<bool>("General", "IsDebug", true, "Show debug messages in log");
             nexusID = Config.Bind<int>("General", "NexusID", 40, "Nexus mod ID for updates");
 
-            m_range = Config.Bind<float>("General", "ContainerRange", 10f, "The maximum range from which to pull items from");
+            maxRange = Config.Bind<float>("General", "ContainerRange", 10f, "The maximum range from which to pull items from");
             //ignoreRangeInBuildArea = Config.Bind<bool>("General", "IgnoreRangeInBuildArea", true, "Ignore range for building pieces when in build area.");
             resourceString = Config.Bind<string>("General", "ResourceCostString", "{0}/{1}", "String used to show required and available resources. {0} is replaced by how much is available, and {1} is replaced by how much is required. Set to nothing to leave it as default.");
             flashColor = Config.Bind<Color>("General", "FlashColor", Color.yellow, "Resource amounts will flash to this colour when coming from containers");
@@ -91,7 +92,8 @@ namespace CraftFromContainers
             pulledMessage = Config.Bind<string>("General", "PulledMessage", "Pulled items to inventory", "Message to show after pulling items to player inventory");
             fuelDisallowTypes = Config.Bind<string>("General", "FuelDisallowTypes", "RoundLog,FineWood", "Types of item to disallow as fuel (i.e. anything that is consumed), comma-separated.");
             oreDisallowTypes = Config.Bind<string>("General", "OreDisallowTypes", "RoundLog,FineWood", "Types of item to disallow as ore (i.e. anything that is transformed), comma-separated).");
-            leaveOne = Config.Bind<bool>("General", "LeaveOne", false, "if true, always leave the last of an item in A container.");
+            leaveOne = Config.Bind<bool>("General", "LeaveOne", false, "Always leave the last of an item in a container.");
+            pullByDistance = Config.Bind<bool>("General", "PullByDistance", false, "When pulling, pull from closest containers first.");
 
             showGhostConnections = Config.Bind<bool>("Station Connections", "ShowConnections", false, "If true, will display connections to nearby workstations within range when building containers");
             ghostConnectionStartOffset = Config.Bind<float>("Station Connections", "ConnectionStartOffset", 1.25f, "Height offset for the connection VFX start position");
@@ -159,7 +161,7 @@ namespace CraftFromContainers
             foreach (Container container in containerList)
             {
                 if (container != null && container.transform != null
-                    && (m_range.Value <= 0 || Vector3.Distance(center, container.transform.position) < m_range.Value)
+                    && (maxRange.Value <= 0 || Vector3.Distance(center, container.transform.position) < maxRange.Value)
                     && AllowContainerType(container)
                     && (bool)checkAccess.Invoke(container, new object[] { Player.m_localPlayer.GetPlayerID() }) 
                     && !container.IsInUse()
@@ -176,6 +178,15 @@ namespace CraftFromContainers
             }
             Dbgl($"Got {containers.Count} containers.");
             lastPosition = center;
+
+            if (pullByDistance.Value)
+            {
+                containers.Sort(delegate (Container a, Container b)
+                {
+                    return Vector3.Distance(center, a.transform.position).CompareTo(Vector3.Distance(center, b.transform.position)); 
+                });
+            }
+
             cachedContainerList = containers;
             return containers;
         }
@@ -296,7 +307,10 @@ namespace CraftFromContainers
 
                             int amount = pullAll ? (int)Mathf.Min(__instance.m_maxFuel - Mathf.CeilToInt(___m_nview.GetZDO().GetFloat("fuel", 0f)), item.m_stack) : 1;
 
-                            amount -= leaveOne.Value ? 1 : 0;
+                            if(amount > 0)
+                                amount -= leaveOne.Value ? 1 : 0;
+                            if (amount == 0)
+                                continue;
 
                             Dbgl($"container at {c.transform.position} has {item.m_stack} {item.m_dropPrefab.name}, taking {amount}");
 
@@ -500,7 +514,10 @@ namespace CraftFromContainers
                             }
                             int amount = pullAll ? (int)Mathf.Min(__instance.m_maxOre - Traverse.Create(__instance).Method("GetQueueSize").GetValue<int>(), c.GetInventory().CountItems(name)) : 1;
 
-                            amount -= leaveOne.Value ? 1 : 0;
+                            if (amount > 0)
+                                amount -= leaveOne.Value ? 1 : 0;
+                            if (amount == 0)
+                                continue;
 
                             if (!added.ContainsKey(name))
                                 added[name] = 0;
@@ -591,7 +608,10 @@ namespace CraftFromContainers
                         }
                         int amount = pullAll ? (int)Mathf.Min(__instance.m_maxFuel - ((float)typeof(Smelter).GetMethod("GetFuel", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(__instance, new object[] { })), newItem.m_stack) : 1;
 
-                        amount -= leaveOne.Value ? 1 : 0;
+                        if (amount > 0)
+                            amount -= leaveOne.Value ? 1 : 0;
+                        if (amount == 0)
+                            continue;
 
                         Dbgl($"container at {c.transform.position} has {newItem.m_stack} {newItem.m_dropPrefab.name}, taking {amount}");
 
@@ -692,7 +712,9 @@ namespace CraftFromContainers
                         if(invAmount < num)
                         {
                             foreach(Container c in nearbyContainers)
-                                invAmount += c.GetInventory().CountItems(requirement.m_resItem.m_itemData.m_shared.m_name) - leaveMod;
+                            {
+                                invAmount += Math.Max(0, c.GetInventory().CountItems(requirement.m_resItem.m_itemData.m_shared.m_name) - leaveMod);
+                            }
                             if (invAmount < num)
                                 return;
                         }
@@ -786,7 +808,8 @@ namespace CraftFromContainers
                             {
                                 try
                                 {
-                                    hasItems += c.GetInventory().CountItems(requirement.m_resItem.m_itemData.m_shared.m_name) - leaveMod;
+                                    hasItems += Math.Max(0, c.GetInventory().CountItems(requirement.m_resItem.m_itemData.m_shared.m_name) - leaveMod);
+
                                     if (hasItems >= requirement.m_amount)
                                     {
                                         break;
@@ -837,12 +860,6 @@ namespace CraftFromContainers
                                 int thisAmount = Mathf.Min(cInventory.CountItems(reqName), totalRequirement - totalAmount);
 
                                 Dbgl($"Container at {c.transform.position} has {cInventory.CountItems(reqName)}");
-
-                                thisAmount -= leaveOne.Value ? 1 : 0;
-
-                                if (thisAmount == 0)
-                                    continue;
-
 
                                 for (int i = 0; i < cInventory.GetAllItems().Count; i++)
                                 {
@@ -948,7 +965,7 @@ namespace CraftFromContainers
                         int connectionIndex = ConnectionExists(station);
                         bool connectionAlreadyExists = connectionIndex != -1;
 
-                        if (Vector3.Distance(station.transform.position, placementGhost.transform.position) < m_range.Value)
+                        if (Vector3.Distance(station.transform.position, placementGhost.transform.position) < maxRange.Value)
                         {
                             bAddedConnections = true;
 
